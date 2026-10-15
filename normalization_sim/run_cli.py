@@ -17,6 +17,13 @@ def main():
     ap.add_argument("--base_minority", type=float, default=0.5)
     ap.add_argument("--survival_floor", type=float, default=0.5)
     ap.add_argument("--p_edge", type=float, default=0.06)
+    ap.add_argument("--shock_sd", type=float, default=0.25, help="daily resource shock (lognormal sd); 0=none")
+    ap.add_argument("--homophily", type=float, default=2.0, help="preference for like-minded partners")
+    ap.add_argument("--opinion_altruism", type=float, default=1.0, help="how much opinion distance cuts giving")
+    ap.add_argument("--opinion_trust", type=float, default=0.03, help="trust loss per unit opinion distance")
+    ap.add_argument("--extremity_susceptibility", type=float, default=0.8, help="0..1; how much distance from the mean drives outlier recruitment")
+    ap.add_argument("--trust_half", type=float, default=0.05, help="trust level at which giving is halved; 0=trust doesn't gate giving")
+    ap.add_argument("--opinion_noise", type=float, default=0.03, help="daily personal opinion drift (sd); 0=none")
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--animate", type=int, default=0, help="1 to output agents_anim.gif")
     ap.add_argument("--frameskip", type=int, default=3)
@@ -29,7 +36,10 @@ def main():
         N=args.N, share_minority=args.minority_share, days=args.days,
         base_majority=args.base_majority, base_minority=args.base_minority,
         survival_floor=args.survival_floor, lambda_=args.lambda_,
-        engagement=args.engagement, p_edge=args.p_edge, seed=args.seed
+        engagement=args.engagement, p_edge=args.p_edge, shock_sd=args.shock_sd,
+        homophily=args.homophily, opinion_altruism=args.opinion_altruism,
+        opinion_trust=args.opinion_trust, extremity_susceptibility=args.extremity_susceptibility,
+        trust_half=args.trust_half, opinion_noise=args.opinion_noise, seed=args.seed
     )
     sim = Simulation(p)
     df = sim.run()
