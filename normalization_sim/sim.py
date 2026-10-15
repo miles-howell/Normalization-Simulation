@@ -14,8 +14,9 @@ class Params:
     share_minority: float = 0.3
     days: int = 120
     base_majority: float = 1.0
-    base_minority: float = 0.5
-    survival_floor: float = 0.5
+    base_minority: float = 0.4          # below survival_floor by design: the minority can't cover its needs without aid
+    survival_floor: float = 0.5         # daily consumption; agents with less than this on hand are starving
+    resource_decay: float = 0.1         # share of savings lost each day (spoilage/depreciation); 1 = no savings
     lambda_: float = 0.15               # normalization strength
     engagement: int = 0                 # 0: normalize toward mean, 1: amplify extremes
     p_edge: float = 0.06                # connection probability
@@ -123,6 +124,8 @@ class Simulation:
         self.base_majority = self.p.base_majority
         self.base_minority = self.p.base_minority
         self.public_good_stock = 0.0
+        # Savings carried over from previous days (after consumption and decay)
+        self.resources = np.zeros(N)
 
         self.history: Dict[str, list] = {k: [] for k in [
             "day","stability","inequality","diversity","avg_trust",
@@ -133,16 +136,16 @@ class Simulation:
 
     def step(self, day: int):
         N = self.p.N
-        # Base resources plus public good
+        # Today's income: base plus public good
         base_maj_today = self.base_majority * (1.0 + self.public_good_stock)
         base_min_today = self.base_minority * (1.0 + self.public_good_stock)
         self.public_good_stock = max(self.public_good_stock * 0.5, 0.0)
 
-        resources = np.where(self.is_minority, base_min_today, base_maj_today)
+        income = np.where(self.is_minority, base_min_today, base_maj_today)
         if self.p.shock_sd > 0:
             # Mean-preserving lognormal shock (good/bad harvest days)
             sd = self.p.shock_sd
-            resources = resources * np.random.lognormal(-0.5 * sd * sd, sd, N)
+            income = income * np.random.lognormal(-0.5 * sd * sd, sd, N)
         gave = np.zeros(N)
         received = np.zeros(N)
 
@@ -169,9 +172,12 @@ class Simulation:
         # Public good
         if public_good_invest > 0:
             invest_rate = min(public_good_invest, 0.2)
-            invested = resources * invest_rate
-            resources -= invested
+            invested = income * invest_rate
+            income = income - invested
             self.public_good_stock += invested.mean() * 0.5
+
+        # What each agent has on hand today: savings plus today's income
+        resources = self.resources + income
 
         effective_altruism = np.clip(self.altruism + altruism_delta, 0, 0.9)
 
@@ -270,6 +276,9 @@ class Simulation:
         self.history["affil_entropy"].append(float(aff_ent))
         self.history["mean_opinion"].append(float(self.opinions.mean()))
         self.history["opinion_std"].append(float(self.opinions.std()))
+
+        # Eat, then carry what is left over to tomorrow
+        self.resources = np.maximum(resources - self.p.survival_floor, 0.0) * (1.0 - self.p.resource_decay)
 
     def run(self) -> pd.DataFrame:
         for day in range(self.p.days):
