@@ -27,6 +27,7 @@ class Params:
     opinion_trust: float = 0.03         # extra trust loss per unit distance when no help flows
     extremity_susceptibility: float = 0.8  # 0..1; infection prob *= (1-w) + w * |o_i - mean| / EXTREMITY_REF
     trust_half: float = 0.05            # giving capacity *= trust / (trust + trust_half); 0 disables
+    opinion_noise: float = 0.03         # sd of each agent's daily idiosyncratic opinion drift
     seed: Optional[int] = 7
 
 def gini(x):
@@ -200,6 +201,9 @@ class Simulation:
             new_op += -self.p.lambda_ * (new_op - mean_op)
         else:
             new_op += +self.p.lambda_ * (new_op - mean_op)
+        if self.p.opinion_noise > 0:
+            # Personal experience keeps nudging opinions, so spread settles where noise balances the pull to consensus
+            new_op += np.random.normal(0, self.p.opinion_noise, N)
         self.opinions = np.clip(new_op, -1, 1)
 
         # Outlier contagion: agents far from the mainstream are more susceptible

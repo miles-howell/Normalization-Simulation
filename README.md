@@ -43,6 +43,7 @@ It’s designed to be **simple, hackable, and visual**—ideal for iterative exp
 - `--base_majority` (default 1.0), `--base_minority` (default 0.5), `--survival_floor` (default 0.5)
 - `--shock_sd` (daily lognormal resource shock; default 0.25, 0=none)
 - `--homophily`, `--opinion_altruism`, `--opinion_trust`, `--extremity_susceptibility`, `--trust_half` (opinion feedback strengths; see below)
+- `--opinion_noise` (daily personal opinion drift; default 0.03, 0=none)
 - `--seed` (random seed)
 - `--animate` (0/1) and `--frameskip` (plot every k days)
 - `--outdir` (where to save outputs)
@@ -63,16 +64,24 @@ The causal chain: normalization → small opinion distances → more giving and 
 Engagement mode pushes agents to opposite poles → help across the divide stops, trust collapses, recruitment into outlier groups speeds up → higher starvation, lower stability.
 Setting `homophily`, `opinion_altruism`, `opinion_trust` and `extremity_susceptibility` to 0 decouples opinions from everything else.
 
-Typical results (150 days, mean of the last 50 days over seeds 7, 11, 23):
+Each agent's opinion also drifts a little every day (`--opinion_noise`, default 0.03), standing in for personal experience.
+Without it, neighbor averaging alone collapses opinions to consensus at any lambda, so the dial would have nothing to act on.
+With it, opinion spread settles where the drift balances the pull toward consensus, so each lambda gives its own level of spread, and through the feedback above its own trust and starvation.
+At `lambda_=0` there is a tipping loop: spread erodes trust, low trust weakens neighbor averaging, and opinions drift toward the poles.
 
-| run | stability | avg_trust | starvation |
-|---|---|---|---|
-| `--lambda_ 0` | 0.703 | 0.183 | 0.134 |
-| `--lambda_ 0.15` | 0.699 | 0.181 | 0.140 |
-| `--lambda_ 0.5` | 0.701 | 0.199 | 0.136 |
-| `--lambda_ 0.15 --engagement 1` | 0.692 | 0.026 | 0.157 |
+Typical results (150 days, mean of the last 50 days over seeds 3, 7, 11, 23, 42, 99):
 
-Normalize vs. engage is the big split. Within normalize mode, the opinion averaging already pulls opinions together at `lambda_=0`, so higher lambda mainly speeds convergence and lifts trust; its effect on starvation is about the size of seed-to-seed noise.
+| run | opinion_std | stability | avg_trust | starvation |
+|---|---|---|---|---|
+| `--lambda_ 0` | 0.750 | 0.691 | 0.027 | 0.158 |
+| `--lambda_ 0.05` | 0.191 | 0.694 | 0.075 | 0.150 |
+| `--lambda_ 0.15` | 0.061 | 0.697 | 0.103 | 0.145 |
+| `--lambda_ 0.5` | 0.035 | 0.698 | 0.124 | 0.141 |
+| `--lambda_ 0.15 --engagement 1` | 0.995 | 0.692 | 0.023 | 0.156 |
+
+Stronger normalization means more trust, less starvation and slightly more stability. Engagement mode ends up about where no normalization does.
+`lambda_` around 0.05 sits near the tipping point, so results there vary most between seeds.
+Stability only moves a little in any setting: it is dominated by the built-in 2:1 majority/minority resource gap.
 
 ## Outputs
 - `metrics.csv` with all tracked metrics.
