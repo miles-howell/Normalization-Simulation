@@ -19,6 +19,14 @@ class Params:
     lambda_: float = 0.15               # normalization strength
     engagement: int = 0                 # 0: normalize toward mean, 1: amplify extremes
     p_edge: float = 0.06                # connection probability
+    shock_sd: float = 0.25              # daily multiplicative (lognormal) resource shock; creates real need
+    # Opinion feedback: how strongly opinion distance |o_i - o_j| (0..2) shapes behavior.
+    # Setting these four to 0 decouples opinions from the rest of the model.
+    homophily: float = 2.0              # neighbor choice weight *= exp(-homophily * distance)
+    opinion_altruism: float = 1.0       # giving capacity *= 1 - opinion_altruism * distance/2
+    opinion_trust: float = 0.03         # extra trust loss per unit distance when no help flows
+    extremity_susceptibility: float = 0.8  # 0..1; infection prob *= (1-w) + w * |o_i - mean| / EXTREMITY_REF
+    trust_half: float = 0.05            # giving capacity *= trust / (trust + trust_half); 0 disables
     seed: Optional[int] = 7
 
 def gini(x):
@@ -42,7 +50,7 @@ def entropy(labels):
     denom = max(log2(len(c)), 1.0)
     return float(-np.sum(probs * np.log2(probs)) / denom)
 
-def choose_neighbor(i, candidates, is_minority, affil, cross_pref):
+def choose_neighbor(i, candidates, is_minority, affil, cross_pref, opinions=None, homophily=0.0):
     if len(candidates) == 0:
         return None
     weights = []
@@ -51,8 +59,14 @@ def choose_neighbor(i, candidates, is_minority, affil, cross_pref):
         w = 1.0 + (cross_pref * (-1 if same_group else +1))
         weights.append(max(w, 0.01))
     weights = np.array(weights, dtype=float)
+    if opinions is not None and homophily > 0:
+        # Homophily: prefer neighbors with similar opinions
+        weights *= np.exp(-homophily * np.abs(opinions[candidates] - opinions[i]))
     weights = weights / weights.sum()
     return np.random.choice(candidates, p=weights)
+
+# Mean |o - mean| of the initial N(0, 0.25) opinions; at this spread contagion runs at its configured rate
+EXTREMITY_REF = 0.2
 
 class Simulation:
     def __init__(self, params: Params):
@@ -101,6 +115,10 @@ class Simulation:
         self.public_good_stock = max(self.public_good_stock * 0.5, 0.0)
 
         resources = np.where(self.is_minority, base_min_today, base_maj_today)
+        if self.p.shock_sd > 0:
+            # Mean-preserving lognormal shock (good/bad harvest days)
+            sd = self.p.shock_sd
+            resources = resources * np.random.lognormal(-0.5 * sd * sd, sd, N)
         gave = np.zeros(N)
         received = np.zeros(N)
 
@@ -136,13 +154,20 @@ class Simulation:
         # One interaction per agent
         for i in range(N):
             neigh = np.where(self.adj[i] == 1)[0]
-            j = choose_neighbor(i, neigh, self.is_minority, self.affil, cross_pref[i]) if len(neigh)>0 else None
+            j = choose_neighbor(i, neigh, self.is_minority, self.affil, cross_pref[i],
+                                self.opinions, self.p.homophily) if len(neigh)>0 else None
             if j is None:
                 continue
             in_group = (self.affil[i] != "none" and self.affil[i] == self.affil[j]) or (self.affil[i] == "religious_cult" and self.affil[j] == "religious_cult")
             bonus = ingroup_bonus[i] if in_group else 0.0
+            # Opinion distance in [0, 2]
+            dist = abs(self.opinions[i] - self.opinions[j])
             need = max(self.p.survival_floor - resources[j], 0)
             give_cap = resources[i] * (effective_altruism[i] + bonus)
+            give_cap *= max(1.0 - self.p.opinion_altruism * dist / 2.0, 0.0)
+            if self.p.trust_half > 0:
+                # Agents who have lost trust in others stop sharing
+                give_cap *= self.trust[i] / (self.trust[i] + self.p.trust_half)
             transfer = min(need, give_cap)
             if transfer > 0:
                 resources[i] -= transfer
@@ -152,8 +177,9 @@ class Simulation:
                 self.trust[i] = np.clip(self.trust[i] + 0.02 + trust_delta[i], 0, 1)
                 self.trust[j] = np.clip(self.trust[j] + 0.02 + trust_delta[j], 0, 1)
             else:
-                self.trust[i] = np.clip(self.trust[i] - 0.005 - max(0, -trust_delta[i]), 0, 1)
-                self.trust[j] = np.clip(self.trust[j] - 0.005 - max(0, -trust_delta[j]), 0, 1)
+                disagreement = self.p.opinion_trust * dist
+                self.trust[i] = np.clip(self.trust[i] - 0.005 - disagreement - max(0, -trust_delta[i]), 0, 1)
+                self.trust[j] = np.clip(self.trust[j] - 0.005 - disagreement - max(0, -trust_delta[j]), 0, 1)
 
         # Policy pushes minority up a bit (and maybe majority down slightly)
         self.base_minority = max(0.2, min(1.2, self.base_minority + policy_push * 0.02))
@@ -176,8 +202,11 @@ class Simulation:
             new_op += +self.p.lambda_ * (new_op - mean_op)
         self.opinions = np.clip(new_op, -1, 1)
 
-        # Outlier contagion
+        # Outlier contagion: agents far from the mainstream are more susceptible
         new_aff = self.affil.copy()
+        extremity = np.abs(self.opinions - self.opinions.mean())
+        w = self.p.extremity_susceptibility
+        susceptibility = (1.0 - w) + w * extremity / EXTREMITY_REF
         for k, spec in OUTLIERS.items():
             p = spec["infection"]
             susceptible = np.where((self.affil == "none") | (np.random.rand(self.p.N) < 0.03))[0]
@@ -185,7 +214,7 @@ class Simulation:
                 neigh = np.where(self.adj[i] == 1)[0]
                 if len(neigh) == 0: 
                     continue
-                if np.any(self.affil[neigh] == k) and (np.random.rand() < p):
+                if np.any(self.affil[neigh] == k) and (np.random.rand() < p * susceptibility[i]):
                     new_aff[i] = k
         self.affil = new_aff
 
