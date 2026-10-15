@@ -11,7 +11,7 @@ It’s designed to be **simple, hackable, and visual**—ideal for iterative exp
 - **Normalization dial (lambda)**: pull opinions toward the mean (or flip to an **engagement mode** that amplifies extremes).
 - **Opinions feed back into behavior** (see below), so the normalization dial moves trust, starvation and stability, not just opinion stats.
 - Daily **resource shocks** (good/bad harvest days) so mutual aid actually matters.
-- Track metrics each day: **stability**, **inequality (Gini)**, **opinion diversity (entropy)**, **affiliation diversity**, **average trust**, **minority starvation rate**, **opinion mean/std**.
+- Track metrics each day: **stability**, **inequality (Gini)**, **opinion diversity (entropy)**, **affiliation diversity**, **average trust**, **starvation rate** (minority, majority and overall), **opinion mean/std**.
 - Save **CSV metrics** and **matplotlib plots**. Optional **GIF animation** of agent states over time.
 
 ## Quick Start
@@ -71,7 +71,7 @@ At `lambda_=0` there is a tipping loop: spread erodes trust, low trust weakens n
 
 Typical results (150 days, mean of the last 50 days over seeds 3, 7, 11, 23, 42, 99):
 
-| run | opinion_std | stability | avg_trust | starvation |
+| run | opinion_std | stability | avg_trust | overall_starvation_rate |
 |---|---|---|---|---|
 | `--lambda_ 0` | 0.750 | 0.691 | 0.027 | 0.158 |
 | `--lambda_ 0.05` | 0.191 | 0.694 | 0.075 | 0.150 |
@@ -86,8 +86,14 @@ Stability only moves a little in any setting: it is dominated by the built-in 2:
 ## Outputs
 - `metrics.csv` with all tracked metrics.
 - `metrics_over_time.png` (stability, trust, 1-inequality).
-- `diversity_and_minority.png` (minority starvation rate, opinion & affiliation diversity).
+- `diversity_and_minority.png` (minority and majority starvation rates, opinion & affiliation diversity).
 - Optional: `agents_anim.gif` (animation).
+
+Metric definitions:
+- `minority_starvation_rate` / `majority_starvation_rate`: share of that group whose resources end the day below `survival_floor`. `overall_starvation_rate` is the same over everyone. The minority rate is empty (NaN) when `--minority_share 0`.
+- `stability` = `1 - 0.7·CV(resources) - 0.3·overall_starvation_rate`, clipped to [0, 1].
+- `diversity`: opinions are cut into 10 equal bins over [-1, 1]; Shannon entropy of the bin shares divided by `log2(10)`. 1 means spread evenly over all 10 bins; two equally full bins give 0.30.
+- `affil_entropy`: the same over the 6 affiliations (5 archetypes plus `"none"`), divided by `log2(6)`.
 
 ## Notes
 - This is **not** a real social prediction engine; it’s a **teaching toy** to visualize tradeoffs.

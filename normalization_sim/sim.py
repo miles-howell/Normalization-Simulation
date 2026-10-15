@@ -40,16 +40,33 @@ def gini(x):
     mad = np.abs(np.subtract.outer(x, x)).mean()
     return 0.5 * mad / mean
 
-def entropy(labels):
+def entropy(labels, n_categories):
+    """Shannon entropy of labels, normalized by log2(n_categories) to [0, 1].
+
+    n_categories is the number of *possible* categories, so 1.0 means spread
+    evenly over all of them, not just over the ones that happen to be present.
+    """
+    if n_categories < 2:
+        return 0.0
     c = Counter(labels)
+    if len(c) > n_categories:
+        raise ValueError(f"{len(c)} distinct labels but n_categories={n_categories}")
+    if len(c) <= 1:
+        # A single category has zero entropy; return it explicitly so it isn't -0.0
+        return 0.0
     total = sum(c.values())
-    if total <= 0:
-        return 0.0
-    probs = np.array([v/total for v in c.values() if v > 0])
-    if len(probs) == 0:
-        return 0.0
-    denom = max(log2(len(c)), 1.0)
-    return float(-np.sum(probs * np.log2(probs)) / denom)
+    probs = np.array([v/total for v in c.values()])
+    return float(-np.sum(probs * np.log2(probs)) / log2(n_categories))
+
+def starvation_rate(resources, floor, mask=None):
+    """Fraction of agents (optionally only those where mask is True) below the survival floor.
+
+    Returns NaN when the selected group is empty (e.g. minority_share=0).
+    """
+    r = np.asarray(resources) if mask is None else np.asarray(resources)[mask]
+    if r.size == 0:
+        return float("nan")
+    return float((r < floor).mean())
 
 def choose_neighbor(i, candidates, is_minority, affil, cross_pref, opinions=None, homophily=0.0):
     if len(candidates) == 0:
@@ -68,6 +85,11 @@ def choose_neighbor(i, candidates, is_minority, affil, cross_pref, opinions=None
 
 # Mean |o - mean| of the initial N(0, 0.25) opinions; at this spread contagion runs at its configured rate
 EXTREMITY_REF = 0.2
+
+# Opinions in [-1, 1] are binned into this many equal-width bins for the diversity metric
+OPINION_BINS = 10
+# Every outlier archetype plus "none"
+N_AFFILIATIONS = len(OUTLIERS) + 1
 
 class Simulation:
     def __init__(self, params: Params):
@@ -104,7 +126,8 @@ class Simulation:
 
         self.history: Dict[str, list] = {k: [] for k in [
             "day","stability","inequality","diversity","avg_trust",
-            "minority_starvation_rate","affil_entropy","mean_opinion",
+            "minority_starvation_rate","majority_starvation_rate",
+            "overall_starvation_rate","affil_entropy","mean_opinion",
             "opinion_std"
         ]}
 
@@ -225,19 +248,25 @@ class Simulation:
         # Metrics
         ineq = gini(resources)
         vol = np.std(resources) / (np.mean(resources) + 1e-9)
-        starvation = (resources < self.p.survival_floor).mean()
+        floor = self.p.survival_floor
+        starvation = starvation_rate(resources, floor)
+        minority_starvation = starvation_rate(resources, floor, self.is_minority)
+        majority_starvation = starvation_rate(resources, floor, ~self.is_minority)
+        # Stability is a society-wide measure, so it uses the overall starvation rate
         stability = float(np.clip(1.0 - 0.7*vol - 0.3*starvation, 0, 1))
 
-        bins = np.clip(((self.opinions + 1) / 2 * 10).astype(int), 0, 9)
-        diversity = entropy(bins)
-        aff_ent = entropy(self.affil)
+        bins = np.clip(((self.opinions + 1) / 2 * OPINION_BINS).astype(int), 0, OPINION_BINS - 1)
+        diversity = entropy(bins, OPINION_BINS)
+        aff_ent = entropy(self.affil, N_AFFILIATIONS)
 
         self.history["day"].append(day)
         self.history["stability"].append(stability)
         self.history["inequality"].append(float(ineq))
         self.history["diversity"].append(float(diversity))
         self.history["avg_trust"].append(float(self.trust.mean()))
-        self.history["minority_starvation_rate"].append(float(starvation))
+        self.history["minority_starvation_rate"].append(minority_starvation)
+        self.history["majority_starvation_rate"].append(majority_starvation)
+        self.history["overall_starvation_rate"].append(starvation)
         self.history["affil_entropy"].append(float(aff_ent))
         self.history["mean_opinion"].append(float(self.opinions.mean()))
         self.history["opinion_std"].append(float(self.opinions.std()))
