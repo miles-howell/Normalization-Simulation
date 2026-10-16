@@ -14,8 +14,9 @@ def main():
     ap.add_argument("--engagement", type=int, default=0, help="0=normalize to mean, 1=amplify extremes")
     ap.add_argument("--minority_share", type=float, default=0.3)
     ap.add_argument("--base_majority", type=float, default=1.0)
-    ap.add_argument("--base_minority", type=float, default=0.5)
-    ap.add_argument("--survival_floor", type=float, default=0.5)
+    ap.add_argument("--base_minority", type=float, default=0.4)
+    ap.add_argument("--survival_floor", type=float, default=0.5, help="daily consumption; less than this on hand = starving")
+    ap.add_argument("--resource_decay", type=float, default=0.1, help="share of savings lost each day; 1=no savings")
     ap.add_argument("--p_edge", type=float, default=0.06)
     ap.add_argument("--shock_sd", type=float, default=0.25, help="daily resource shock (lognormal sd); 0=none")
     ap.add_argument("--homophily", type=float, default=2.0, help="preference for like-minded partners")
@@ -35,7 +36,7 @@ def main():
     p = Params(
         N=args.N, share_minority=args.minority_share, days=args.days,
         base_majority=args.base_majority, base_minority=args.base_minority,
-        survival_floor=args.survival_floor, lambda_=args.lambda_,
+        survival_floor=args.survival_floor, resource_decay=args.resource_decay, lambda_=args.lambda_,
         engagement=args.engagement, p_edge=args.p_edge, shock_sd=args.shock_sd,
         homophily=args.homophily, opinion_altruism=args.opinion_altruism,
         opinion_trust=args.opinion_trust, extremity_susceptibility=args.extremity_susceptibility,
