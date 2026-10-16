@@ -2,6 +2,11 @@
 import os
 import matplotlib.pyplot as plt
 
+def mark_disasters(df):
+    # Thin vertical line on each day a disaster struck
+    for day in df.loc[df["disaster_loss"] > 0, "day"]:
+        plt.axvline(day, color="gray", alpha=0.4, linewidth=1)
+
 def plot_metrics(df, outdir):
     os.makedirs(outdir, exist_ok=True)
     # Figure 1
@@ -11,6 +16,7 @@ def plot_metrics(df, outdir):
     plt.plot(df["day"], df["avg_trust_in"], label="In-group Trust", linestyle=":")
     plt.plot(df["day"], df["avg_trust_out"], label="Out-group Trust", linestyle="--")
     plt.plot(df["day"], 1 - df["inequality"], label="(1 - Inequality)")
+    mark_disasters(df)
     plt.legend()
     plt.title("Stability, Trust, and (1 - Inequality) Over Time")
     plt.xlabel("Day")
@@ -25,6 +31,7 @@ def plot_metrics(df, outdir):
     plt.plot(df["day"], df["majority_starvation_rate"], label="Majority Starvation Rate", linestyle="--")
     plt.plot(df["day"], df["diversity"], label="Opinion Diversity (entropy / log2 10 bins)")
     plt.plot(df["day"], df["affil_entropy"], label="Affiliation Diversity (entropy / log2 6 groups)")
+    mark_disasters(df)
     plt.legend()
     plt.title("Starvation by Group and Diversity Over Time")
     plt.xlabel("Day")

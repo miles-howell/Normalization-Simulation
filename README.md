@@ -43,6 +43,7 @@ It’s designed to be **simple, hackable, and visual**—ideal for iterative exp
 - `--homophily`, `--opinion_altruism`, `--opinion_trust`, `--extremity_susceptibility`, `--trust_half` (opinion feedback strengths; see below)
 - `--opinion_noise` (daily personal opinion drift; default 0.03, 0=none)
 - `--trust_gain` (default 0.02), `--trust_loss` (default 0.02), `--trust_reversion` (default 0.02): how trust responds to help and refusals and how fast it returns to baseline (see "Trust" below)
+- `--disaster_days` (days on which a disaster strikes, e.g. `--disaster_days 60 100`; default none), `--disaster_severity` (0.5), `--disaster_threshold` (0.5), `--disaster_mitigation` (0.75), `--disaster_trust_shift` (0.05) (see "Disasters" below)
 - `--seed` (random seed)
 - `--outdir` (where to save outputs)
 
@@ -80,6 +81,21 @@ Trust only moves when cooperation matters, i.e. when the neighbor an agent meets
 Trust therefore settles where the help an agent receives and the refusals it meets balance the pull back to its baseline.
 Only agents who need help (in practice the minority) see their trust move much; the majority rarely needs help, so its trust stays close to baseline, rising slightly from giving.
 Trust in the other camp ends up lower than in the own camp, because asks across camps involve larger opinion distances and archetype suspicion.
+
+## Disasters
+A disaster is a hazard that can only be handled if both opinion camps work together.
+Disasters never happen on their own: they strike on the days listed in `--disaster_days`, or at the start of the next step after calling `Simulation.trigger_disaster()` from code.
+
+When one strikes (before the day's mutual aid):
+
+1. **Cooperation** is measured as the mean out-group trust of the less willing camp (agents are willing to work with the other camp as far as they trust it). If everyone is in one camp, mean in-group trust is used instead.
+2. If cooperation reaches `--disaster_threshold` the joint response works and prevents `--disaster_mitigation` of the damage; otherwise it fails.
+3. Everyone loses `--disaster_severity` of their resources on hand (savings plus today's income), reduced by the mitigation if the response worked: 12.5% instead of 50% with the defaults.
+4. Working together raises everyone's out-group trust by `--disaster_trust_shift`; failing together lowers it by the same amount. Repeated failures therefore make the next response more likely to fail.
+
+The disaster days are marked with gray vertical lines in both plots.
+These defaults are not tuned: with today's opinion dynamics cooperation sits around 0.59, so with the default threshold the response works in every dial setting.
+The mechanism is meant to become informative once the dial produces real clusters again (issues #16 and #17); a policy for when disasters strike automatically is left for later.
 
 ## How opinions feed back into the model
 Opinions live in [-1, 1]; the distance between two agents' opinions is `d = |o_i - o_j|` (0..2).
@@ -128,6 +144,7 @@ Stability and inequality (about 0.31) are dominated by the gap between majority 
 Metric definitions:
 - `minority_starvation_rate` / `majority_starvation_rate`: share of that group whose resources on hand (savings + income + aid) are below `survival_floor`, i.e. who can't cover the day's consumption. `overall_starvation_rate` is the same over everyone. The minority rate is empty (NaN) when `--minority_share 0`.
 - `avg_trust_in` / `avg_trust_out`: mean in-group and out-group trust over all agents; `avg_trust` is the mean of the two.
+- `disaster_loss`: share of resources on hand destroyed by a disaster that day (0 on days without one); `disaster_cooperation`: the cooperation level of that day's response (empty on days without one).
 - `inequality`: Gini coefficient of resources on hand (before consumption).
 - `stability` = `1 - 0.7·CV(resources on hand) - 0.3·overall_starvation_rate`, clipped to [0, 1].
 - `diversity`: opinions are cut into 10 equal bins over [-1, 1]; Shannon entropy of the bin shares divided by `log2(10)`. 1 means spread evenly over all 10 bins; two equally full bins give 0.30.
