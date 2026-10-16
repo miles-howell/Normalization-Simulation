@@ -31,6 +31,7 @@ def plot_metrics(df, outdir):
     plt.plot(df["day"], df["majority_starvation_rate"], label="Majority Starvation Rate", linestyle="--")
     plt.plot(df["day"], df["diversity"], label="Opinion Diversity (entropy / log2 10 bins)")
     plt.plot(df["day"], df["affil_entropy"], label="Affiliation Diversity (entropy / log2 6 groups)")
+    plt.plot(df["day"], df["extreme_share"], label="Share at the Bounds (|opinion| >= 0.9)", linestyle=":")
     mark_disasters(df)
     plt.legend()
     plt.title("Starvation by Group and Diversity Over Time")

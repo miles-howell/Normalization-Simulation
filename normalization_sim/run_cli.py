@@ -9,8 +9,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--N", type=int, default=240)
     ap.add_argument("--days", type=int, default=150)
-    ap.add_argument("--lambda_", type=float, default=0.15)
-    ap.add_argument("--engagement", type=int, default=0, help="0=normalize to mean, 1=amplify extremes")
+    ap.add_argument("--lambda_", type=float, default=0.15, help="share of attention on the feed (0..1); the rest goes to peers")
+    ap.add_argument("--engagement", type=int, default=0, help="0=normalizing feed (mainstream content), 1=engagement feed (own side, more extreme)")
+    ap.add_argument("--feed_influence", type=float, default=0.2, help="daily share of the way toward feed content at full attention, times trust")
+    ap.add_argument("--feed_spread", type=float, default=0.1, help="sd of feed content positions around their target")
+    ap.add_argument("--feed_push", type=float, default=0.3, help="engagement feed: how much more extreme than the viewer content is")
+    ap.add_argument("--feed_outrage", type=float, default=0.01, help="engagement feed: daily out-group trust loss at full attention")
     ap.add_argument("--minority_share", type=float, default=0.3)
     ap.add_argument("--base_majority", type=float, default=1.0)
     ap.add_argument("--base_minority", type=float, default=0.4)
@@ -45,7 +49,8 @@ def main():
         N=args.N, share_minority=args.minority_share, days=args.days,
         base_majority=args.base_majority, base_minority=args.base_minority,
         survival_floor=args.survival_floor, resource_decay=args.resource_decay, lambda_=args.lambda_,
-        engagement=args.engagement, p_edge=args.p_edge, shock_sd=args.shock_sd,
+        engagement=args.engagement, feed_influence=args.feed_influence, feed_spread=args.feed_spread,
+        feed_push=args.feed_push, feed_outrage=args.feed_outrage, p_edge=args.p_edge, shock_sd=args.shock_sd,
         homophily=args.homophily, opinion_altruism=args.opinion_altruism,
         opinion_trust=args.opinion_trust, extremity_susceptibility=args.extremity_susceptibility,
         trust_half=args.trust_half, influence=args.influence, epsilon=args.epsilon,

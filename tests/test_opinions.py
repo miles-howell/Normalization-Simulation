@@ -55,15 +55,20 @@ def test_stubbornness_is_drawn_around_its_mean():
 
 # --- whole runs ----------------------------------------------------------------
 
+def without_groups(**kw):
+    """A run with no outlier groups, whose polarization would otherwise keep widening the spread (issue #18)."""
+    sim = Simulation(Params(**{"N": 120, "days": 150, **kw}))
+    sim.affil[:] = "none"
+    return sim
+
+
 def settled_std(**kw):
-    """Opinion spread over the last 50 days, averaged over two seeds."""
-    return float(np.mean([
-        Simulation(Params(N=120, days=150, seed=s, **kw)).run()["opinion_std"].tail(50).mean() for s in (3, 7)
-    ]))
+    """Opinion spread over the last 50 days without outlier groups, averaged over two seeds."""
+    return float(np.mean([without_groups(seed=s, **kw).run()["opinion_std"].tail(50).mean() for s in (3, 7)]))
 
 
 def test_default_spread_settles_above_zero_and_agents_keep_their_views():
-    sim = Simulation(Params(N=120, days=150, seed=7))
+    sim = without_groups(seed=7)
     std = sim.run()["opinion_std"]
     settled = std.tail(50).mean()
     assert settled > 0.05
@@ -74,8 +79,7 @@ def test_default_spread_settles_above_zero_and_agents_keep_their_views():
 
 def test_peer_influence_alone_settles_over_weeks():
     # No dial and no outlier groups: only peer influence and anchoring move opinions
-    sim = Simulation(Params(N=120, days=150, seed=7, lambda_=0.0))
-    sim.affil[:] = "none"
+    sim = without_groups(seed=7, lambda_=0.0)
     std = sim.run()["opinion_std"]
     settled = std.tail(50).mean()
     assert settled > 0.1
@@ -86,8 +90,7 @@ def test_peer_influence_alone_settles_over_weeks():
 
 
 def test_wider_confidence_narrows_the_spread():
-    # At the default lambda_ the dial keeps nearly every partner within reach, so use a weaker one
-    assert settled_std(lambda_=0.05, epsilon=1.0) < settled_std(lambda_=0.05, epsilon=0.25)
+    assert settled_std(epsilon=1.0) < settled_std(epsilon=0.25)
 
 
 def test_less_stubbornness_narrows_the_spread():

@@ -17,8 +17,13 @@ class Params:
     base_minority: float = 0.4          # below survival_floor by design: the minority can't cover its needs without aid
     survival_floor: float = 0.5         # daily consumption; agents with less than this on hand are starving
     resource_decay: float = 0.1         # share of savings lost each day (spoilage/depreciation); 1 = no savings
-    lambda_: float = 0.15               # normalization strength
-    engagement: int = 0                 # 0: normalize toward mean, 1: amplify extremes
+    # The feed: each agent sees one content item a day and gives it a share lambda_ of its attention
+    lambda_: float = 0.15               # share of attention on the feed (0..1); the rest goes to the peer network
+    engagement: int = 0                 # 0: normalizing feed (mainstream content), 1: engagement feed (own side, more extreme)
+    feed_influence: float = 0.2         # daily share of the way toward feed content at full attention, times trust in its camp
+    feed_spread: float = 0.1            # sd of content positions around their target
+    feed_push: float = 0.3              # engagement feed: how much more extreme than the viewer the content is
+    feed_outrage: float = 0.01          # engagement feed: daily out-group trust loss at full attention
     p_edge: float = 0.06                # connection probability
     shock_sd: float = 0.25              # daily multiplicative (lognormal) resource shock; creates real need
     # Opinion feedback: how strongly opinion distance |o_i - o_j| (0..2) shapes behavior.
@@ -103,12 +108,16 @@ GIVER_TRUST_SHARE = 0.25
 
 # Opinions in [-1, 1] are binned into this many equal-width bins for the diversity metric
 OPINION_BINS = 10
+# Agents with |opinion| at least this are counted as being at the bounds
+EXTREME_OPINION = 0.9
 # Every outlier archetype plus "none"
 N_AFFILIATIONS = len(OUTLIERS) + 1
 
 class Simulation:
     def __init__(self, params: Params):
         self.p = params
+        if not 0 <= self.p.lambda_ <= 1:
+            raise ValueError(f"lambda_ is a share of attention and must be in [0, 1], got {self.p.lambda_}")
         if self.p.seed is not None:
             np.random.seed(self.p.seed)
 
@@ -152,7 +161,7 @@ class Simulation:
             "day","stability","inequality","diversity","avg_trust","avg_trust_in","avg_trust_out",
             "minority_starvation_rate","majority_starvation_rate",
             "overall_starvation_rate","affil_entropy","mean_opinion",
-            "opinion_std","disaster_loss","disaster_cooperation"
+            "opinion_std","extreme_share","disaster_loss","disaster_cooperation"
         ]}
         self._disaster_pending = False
 
@@ -163,6 +172,21 @@ class Simulation:
     def trust_toward(self, i, j):
         """Agent i's trust in agent j: in-group or out-group trust depending on their opinion camps."""
         return self.trust_in[i] if self.same_camp(i, j) else self.trust_out[i]
+
+    def feed_content(self):
+        """Opinion position of the content item each agent sees today.
+
+        The normalizing feed shows mainstream content: popular posts sit near the population mean.
+        The engagement feed shows content from the viewer's own side, feed_push more extreme than the viewer.
+        """
+        N = self.p.N
+        noise = np.random.normal(0, self.p.feed_spread, N) if self.p.feed_spread > 0 else np.zeros(N)
+        if self.p.engagement > 0:
+            side = np.where(self.opinions >= 0, 1.0, -1.0)
+            target = self.opinions + self.p.feed_push * side
+        else:
+            target = np.full(N, self.opinions.mean())
+        return np.clip(target + noise, -1, 1)
 
     def trigger_disaster(self):
         """Make a disaster strike at the start of the next step."""
@@ -290,9 +314,10 @@ class Simulation:
         self.base_minority = max(0.2, min(1.2, self.base_minority + policy_push * 0.02))
         self.base_majority = max(0.6, min(1.4, self.base_majority - policy_push * 0.01))
 
-        # Opinion interactions: one partner per agent, chosen like the aid partner; partners further
-        # apart than epsilon are ignored (bounded confidence, no repulsion)
+        # Opinion interactions: one partner per agent, chosen like the aid partner, and one feed item. Both go
+        # through bounded confidence: sources further away than epsilon are ignored (no repulsion)
         new_op = self.opinions.copy()
+        attention = self.p.lambda_
         for i in range(N):
             neigh = np.where(self.adj[i] == 1)[0]
             j = choose_neighbor(i, neigh, self.is_minority, self.affil, cross_pref[i],
@@ -302,14 +327,21 @@ class Simulation:
             diff = self.opinions[j] - self.opinions[i]
             if abs(diff) < self.p.epsilon:
                 rate = self.p.influence * (self.trust_toward(i, j) + self.trust_toward(j, i)) / 2.0
-                new_op[i] += rate * diff
+                new_op[i] += (1.0 - attention) * rate * diff
+        if attention > 0:
+            content = self.feed_content()
+            diff = content - self.opinions
+            # Content is weighed with the viewer's trust in the camp it comes from
+            same = (content >= 0) == (self.opinions >= 0)
+            trust = np.where(same, self.trust_in, self.trust_out)
+            heard = np.abs(diff) < self.p.epsilon
+            new_op += heard * attention * self.p.feed_influence * trust * diff
+            if self.p.engagement > 0 and self.p.feed_outrage > 0:
+                # Outrage content about the other side erodes trust in it without moving positions
+                self.trust_out = np.clip(self.trust_out - attention * self.p.feed_outrage, 0, 1)
 
         mean_op = new_op.mean()
         new_op += polarization_delta * (new_op - mean_op)
-        if self.p.engagement <= 0:
-            new_op += -self.p.lambda_ * (new_op - mean_op)
-        else:
-            new_op += +self.p.lambda_ * (new_op - mean_op)
         # Friedkin-Johnsen anchoring: the settled spread comes from how spread out the anchors are
         s = self.stubbornness
         new_op = s * self.anchors + (1 - s) * new_op
@@ -361,6 +393,7 @@ class Simulation:
         self.history["affil_entropy"].append(float(aff_ent))
         self.history["mean_opinion"].append(float(self.opinions.mean()))
         self.history["opinion_std"].append(float(self.opinions.std()))
+        self.history["extreme_share"].append(float((np.abs(self.opinions) >= EXTREME_OPINION).mean()))
         self.history["disaster_loss"].append(disaster_loss)
         self.history["disaster_cooperation"].append(disaster_cooperation)
 
