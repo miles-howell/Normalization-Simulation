@@ -113,6 +113,28 @@ EXTREME_OPINION = 0.9
 # Every outlier archetype plus "none"
 N_AFFILIATIONS = len(OUTLIERS) + 1
 
+def ideological_fit(opinions, position, width):
+    """How well agents at these opinions fit a group standing at position: 1 at position, falling off over width."""
+    return np.exp(-0.5 * ((np.asarray(opinions) - position) / width) ** 2)
+
+def join_probabilities(exposure, opinions, susceptibility, outliers):
+    """Each agent's chance of joining each archetype today, as an (agents x archetypes) array in the order of outliers.
+
+    exposure[:, k] is the share of the agent's neighbors in archetype k. Archetype k only recruits agents at or above
+    its join_threshold (complex contagion), with a daily hazard of infection x fit x susceptibility.
+    The agent joins at most one group: it joins any with chance 1 - prod(1 - hazard_k), split between the groups in
+    proportion to their hazards. Nothing depends on the order of the archetypes.
+    """
+    hazard = np.zeros_like(exposure, dtype=float)
+    for k, spec in enumerate(outliers.values()):
+        fit = ideological_fit(opinions, spec["position"], spec["fit_width"])
+        reached = exposure[:, k] >= spec["join_threshold"]
+        hazard[:, k] = np.where(reached, np.clip(spec["infection"] * fit * susceptibility, 0, 1), 0.0)
+    total = hazard.sum(axis=1)
+    p_any = 1.0 - np.prod(1.0 - hazard, axis=1)
+    share = np.divide(hazard, total[:, None], out=np.zeros_like(hazard), where=total[:, None] > 0)
+    return share * p_any[:, None]
+
 class Simulation:
     def __init__(self, params: Params):
         self.p = params
@@ -143,13 +165,17 @@ class Simulation:
         np.fill_diagonal(adj, 0)
         self.adj = np.maximum(adj, adj.T)
 
-        # Seed small groups
-        seeds = {"social_justice": 6, "political_extremists": 6, "environmentalists": 5, "antivaxx_misinfo": 5, "religious_cult": 5}
-        idxs = np.random.permutation(N)
-        cursor = 0
-        for k, cnt in seeds.items():
-            self.affil[idxs[cursor:cursor+cnt]] = k
-            cursor += cnt
+        # Seed small groups: groups start as a local cluster, a founder near the group's position
+        # and the founder's neighbors closest to that position
+        for k, spec in OUTLIERS.items():
+            free = np.where(self.affil == "none")[0]
+            if len(free) == 0:
+                break
+            dist = np.abs(self.opinions - spec["position"])
+            founder = free[np.argmin(dist[free])]
+            neigh = np.where((self.adj[founder] == 1) & (self.affil == "none"))[0]
+            members = np.concatenate(([founder], neigh[np.argsort(dist[neigh])][:spec.get("seed_size", 5) - 1]))
+            self.affil[members] = k
 
         self.base_majority = self.p.base_majority
         self.base_minority = self.p.base_minority
@@ -342,6 +368,10 @@ class Simulation:
 
         mean_op = new_op.mean()
         new_op += polarization_delta * (new_op - mean_op)
+        # Group polarization: members are pulled toward the position their group stands for
+        for k, spec in OUTLIERS.items():
+            idx = self.affil == k
+            new_op[idx] += spec.get("opinion_pull", 0.0) * (spec["position"] - new_op[idx])
         # Friedkin-Johnsen anchoring: the settled spread comes from how spread out the anchors are
         s = self.stubbornness
         new_op = s * self.anchors + (1 - s) * new_op
@@ -350,21 +380,7 @@ class Simulation:
             new_op += np.random.normal(0, self.p.opinion_noise, N)
         self.opinions = np.clip(new_op, -1, 1)
 
-        # Outlier contagion: agents far from the mainstream are more susceptible
-        new_aff = self.affil.copy()
-        extremity = np.abs(self.opinions - self.opinions.mean())
-        w = self.p.extremity_susceptibility
-        susceptibility = (1.0 - w) + w * extremity / EXTREMITY_REF
-        for k, spec in OUTLIERS.items():
-            p = spec["infection"]
-            susceptible = np.where((self.affil == "none") | (np.random.rand(self.p.N) < 0.03))[0]
-            for i in susceptible:
-                neigh = np.where(self.adj[i] == 1)[0]
-                if len(neigh) == 0: 
-                    continue
-                if np.any(self.affil[neigh] == k) and (np.random.rand() < p * susceptibility[i]):
-                    new_aff[i] = k
-        self.affil = new_aff
+        self.update_affiliations()
 
         # Metrics
         ineq = gini(resources)
@@ -399,6 +415,45 @@ class Simulation:
 
         # Eat, then carry what is left over to tomorrow
         self.resources = np.maximum(resources - self.p.survival_floor, 0.0) * (1.0 - self.p.resource_decay)
+
+    def update_affiliations(self):
+        """Joining and leaving outlier groups, from yesterday's memberships.
+
+        Unaffiliated agents join at most one group (see join_probabilities); agents far from the mainstream are
+        easier to recruit. Members leave back to "none" with their group's exit_rate; switching groups happens by
+        leaving and later joining another.
+        """
+        N = self.p.N
+        names = list(OUTLIERS)
+        if not names:
+            return
+        members = np.stack([self.affil == k for k in names], axis=1).astype(float)
+        degree = self.adj.sum(axis=1)
+        exposure = np.divide(self.adj @ members, degree[:, None], out=np.zeros_like(members), where=degree[:, None] > 0)
+        extremity = np.abs(self.opinions - self.opinions.mean())
+        w = self.p.extremity_susceptibility
+        susceptibility = (1.0 - w) + w * extremity / EXTREMITY_REF
+        probs = join_probabilities(exposure, self.opinions, susceptibility, OUTLIERS)
+
+        new_aff = self.affil.copy()
+        free = self.affil == "none"
+        # One draw per agent picks the group it joins, if any
+        u = np.random.rand(N)
+        cum = np.cumsum(probs, axis=1)
+        joined = free & (u < cum[:, -1])
+        choice = (u[:, None] >= cum).sum(axis=1)
+        new_aff[joined] = np.array(names, dtype=object)[choice[joined]]
+
+        # Members who fit their group well (its committed core) leave at half the exit_rate, those who no longer fit
+        # at up to 1.5 times it
+        exit_rate = np.zeros(N)
+        for k, spec in OUTLIERS.items():
+            idx = self.affil == k
+            fit = ideological_fit(self.opinions[idx], spec["position"], spec["fit_width"])
+            exit_rate[idx] = spec["exit_rate"] * (1.5 - fit)
+        leaves = ~free & (np.random.rand(N) < exit_rate)
+        new_aff[leaves] = "none"
+        self.affil = new_aff
 
     def run(self) -> pd.DataFrame:
         for day in range(self.p.days):
