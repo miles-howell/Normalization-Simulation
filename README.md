@@ -13,7 +13,7 @@ It’s designed to be **simple, hackable, and visual**—ideal for iterative exp
 - **Opinions feed back into behavior** (see below), so the normalization dial moves trust, starvation and stability, not just opinion stats.
 - Daily **resource shocks** (good/bad harvest days) so mutual aid actually matters.
 - Track metrics each day: **stability**, **inequality (Gini)**, **opinion diversity (entropy)**, **affiliation diversity**, **average trust**, **starvation rate** (minority, majority and overall), **opinion mean/std**.
-- Save **CSV metrics** and **matplotlib plots**. Optional **GIF animation** of agent states over time.
+- Save **CSV metrics** and **matplotlib plots**.
 
 ## Quick Start
 1. **Requirements** (Python 3.9+):
@@ -30,11 +30,6 @@ It’s designed to be **simple, hackable, and visual**—ideal for iterative exp
     python -m normalization_sim.run_cli --days 150 --lambda_ 0.15 --engagement 1 --outdir outputs/engage_demo
     ```
 
-3. **Animate agents** (optional; writes a GIF, slower):
-    ```bash
-    python -m normalization_sim.run_cli --days 150 --animate 1 --frameskip 3 --outdir outputs/anim_demo
-    ```
-
 ## Dials (CLI flags)
 - `--N` (agents, default 240)
 - `--days` (time steps)
@@ -48,7 +43,6 @@ It’s designed to be **simple, hackable, and visual**—ideal for iterative exp
 - `--homophily`, `--opinion_altruism`, `--opinion_trust`, `--extremity_susceptibility`, `--trust_half` (opinion feedback strengths; see below)
 - `--opinion_noise` (daily personal opinion drift; default 0.03, 0=none)
 - `--seed` (random seed)
-- `--animate` (0/1) and `--frameskip` (plot every k days)
 - `--outdir` (where to save outputs)
 
 ## Resource economy
@@ -108,7 +102,6 @@ Stability only moves a little in any setting: it is dominated by the gap between
 - `metrics.csv` with all tracked metrics.
 - `metrics_over_time.png` (stability, trust, 1-inequality).
 - `diversity_and_minority.png` (minority and majority starvation rates, opinion & affiliation diversity).
-- Optional: `agents_anim.gif` (animation).
 
 Metric definitions:
 - `minority_starvation_rate` / `majority_starvation_rate`: share of that group whose resources on hand (savings + income + aid) are below `survival_floor`, i.e. who can't cover the day's consumption. `overall_starvation_rate` is the same over everyone. The minority rate is empty (NaN) when `--minority_share 0`.
