@@ -68,7 +68,8 @@ def test_inequality_rises_as_savings_build():
 
 def test_inequality_responds_to_policy(outliers):
     baseline = Simulation(Params(N=120, days=60, seed=3)).run()
-    outliers["social_justice"]["policy_push"] = 5.0
+    # Strong enough to close most of the gap by day 60; much more overshoots into the minority out-earning the majority
+    outliers["social_justice"]["policy_push"] = 3.0
     pushed = Simulation(Params(N=120, days=60, seed=3)).run()
     assert pushed["inequality"].tail(15).mean() < baseline["inequality"].tail(15).mean() - 0.1
 

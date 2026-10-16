@@ -28,7 +28,12 @@ class Params:
     opinion_trust: float = 0.03         # extra trust loss per unit distance when help is refused
     extremity_susceptibility: float = 0.8  # 0..1; infection prob *= (1-w) + w * |o_i - mean| / EXTREMITY_REF
     trust_half: float = 0.05            # giving capacity *= trust / (trust + trust_half); 0 disables
-    opinion_noise: float = 0.03         # sd of each agent's daily idiosyncratic opinion drift
+    # Opinions (Friedkin-Johnsen with bounded confidence): agents are pulled toward their own initial view (anchor)
+    # and only listen to partners whose opinion is within epsilon of their own
+    influence: float = 0.05             # daily share of the way toward the partner's opinion, times the pair's mean trust
+    epsilon: float = 0.5                # bounded confidence: partners further apart than this have no influence
+    stubbornness: float = 0.1           # mean daily weight s_i on the agent's anchor; s_i ~ N(mean, mean/2) clipped to [0, 1]
+    opinion_noise: float = 0.0          # sd of each agent's daily idiosyncratic opinion drift; 0 = none
     # Trust only moves when someone needs help; it is split into trust in the own opinion camp and the other one
     trust_gain: float = 0.02            # asker's trust gain when its need is fully covered
     trust_loss: float = 0.02            # asker's trust loss when it gets nothing
@@ -82,12 +87,8 @@ def starvation_rate(resources, floor, mask=None):
 def choose_neighbor(i, candidates, is_minority, affil, cross_pref, opinions=None, homophily=0.0):
     if len(candidates) == 0:
         return None
-    weights = []
-    for j in candidates:
-        same_group = (is_minority[i] == is_minority[j])
-        w = 1.0 + (cross_pref * (-1 if same_group else +1))
-        weights.append(max(w, 0.01))
-    weights = np.array(weights, dtype=float)
+    same_group = is_minority[candidates] == is_minority[i]
+    weights = np.maximum(1.0 + cross_pref * np.where(same_group, -1.0, 1.0), 0.01)
     if opinions is not None and homophily > 0:
         # Homophily: prefer neighbors with similar opinions
         weights *= np.exp(-homophily * np.abs(opinions[candidates] - opinions[i]))
@@ -117,6 +118,10 @@ class Simulation:
         np.random.shuffle(self.is_minority)
 
         self.opinions = np.random.normal(0, 0.25, N).clip(-1, 1)
+        # Core attitudes are sticky: each agent keeps being pulled back toward its initial opinion
+        self.anchors = self.opinions.copy()
+        m = self.p.stubbornness
+        self.stubbornness = np.clip(np.random.normal(m, m / 2, N), 0, 1)
         self.altruism = np.clip(np.random.normal(0.1, 0.05, N), 0, 0.6)
         # Each agent's generalized trust; trust in each camp starts there and drifts back to it
         self.trust_base = np.clip(np.random.normal(0.6, 0.1, N), 0, 1)
@@ -285,14 +290,19 @@ class Simulation:
         self.base_minority = max(0.2, min(1.2, self.base_minority + policy_push * 0.02))
         self.base_majority = max(0.6, min(1.4, self.base_majority - policy_push * 0.01))
 
-        # Opinion interactions
+        # Opinion interactions: one partner per agent, chosen like the aid partner; partners further
+        # apart than epsilon are ignored (bounded confidence, no repulsion)
         new_op = self.opinions.copy()
         for i in range(N):
             neigh = np.where(self.adj[i] == 1)[0]
-            if len(neigh) > 0:
-                j = np.random.choice(neigh)
-                influence = (self.trust_toward(i, j) + self.trust_toward(j, i)) / 4.0
-                new_op[i] += influence * (self.opinions[j] - self.opinions[i])
+            j = choose_neighbor(i, neigh, self.is_minority, self.affil, cross_pref[i],
+                                self.opinions, self.p.homophily)
+            if j is None:
+                continue
+            diff = self.opinions[j] - self.opinions[i]
+            if abs(diff) < self.p.epsilon:
+                rate = self.p.influence * (self.trust_toward(i, j) + self.trust_toward(j, i)) / 2.0
+                new_op[i] += rate * diff
 
         mean_op = new_op.mean()
         new_op += polarization_delta * (new_op - mean_op)
@@ -300,8 +310,11 @@ class Simulation:
             new_op += -self.p.lambda_ * (new_op - mean_op)
         else:
             new_op += +self.p.lambda_ * (new_op - mean_op)
+        # Friedkin-Johnsen anchoring: the settled spread comes from how spread out the anchors are
+        s = self.stubbornness
+        new_op = s * self.anchors + (1 - s) * new_op
         if self.p.opinion_noise > 0:
-            # Personal experience keeps nudging opinions, so spread settles where noise balances the pull to consensus
+            # Optional personal experience nudging opinions
             new_op += np.random.normal(0, self.p.opinion_noise, N)
         self.opinions = np.clip(new_op, -1, 1)
 
