@@ -38,6 +38,7 @@ class Params:
     influence: float = 0.05             # daily share of the way toward the partner's opinion, times the pair's mean trust
     epsilon: float = 0.5                # bounded confidence: partners further apart than this have no influence
     stubbornness: float = 0.1           # mean daily weight s_i on the agent's anchor; s_i ~ N(mean, mean/2) clipped to [0, 1]
+    opinion_group_shift: float = 0.0    # initial minority opinions centered at +shift, majority at -shift*m/(1-m) (mean stays 0)
     opinion_noise: float = 0.0          # sd of each agent's daily idiosyncratic opinion drift; 0 = none
     # Trust only moves when someone needs help; it is split into trust in the own opinion camp and the other one
     trust_gain: float = 0.02            # asker's trust gain when its need is fully covered
@@ -148,7 +149,13 @@ class Simulation:
         self.is_minority[:int(N * self.p.share_minority)] = True
         np.random.shuffle(self.is_minority)
 
-        self.opinions = np.random.normal(0, 0.25, N).clip(-1, 1)
+        self.opinions = np.random.normal(0, 0.25, N)
+        shift = self.p.opinion_group_shift
+        if shift != 0:
+            # Opinions line up with economic position: the minority leans to one side, the majority to the other
+            share = self.is_minority.mean()
+            self.opinions += np.where(self.is_minority, shift, -shift * share / (1 - share) if share < 1 else 0.0)
+        self.opinions = self.opinions.clip(-1, 1)
         # Core attitudes are sticky: each agent keeps being pulled back toward its initial opinion
         self.anchors = self.opinions.copy()
         m = self.p.stubbornness

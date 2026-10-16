@@ -30,6 +30,7 @@ def main():
     ap.add_argument("--influence", type=float, default=0.05, help="daily share of the way toward a partner's opinion, times the pair's mean trust")
     ap.add_argument("--epsilon", type=float, default=0.5, help="bounded confidence: partners further apart in opinion than this have no influence")
     ap.add_argument("--stubbornness", type=float, default=0.1, help="mean daily pull back toward each agent's initial opinion (0..1)")
+    ap.add_argument("--opinion_group_shift", type=float, default=0.0, help="initial opinion lean of the minority (+) vs majority (-); 0=opinions independent of group")
     ap.add_argument("--opinion_noise", type=float, default=0.0, help="daily personal opinion drift (sd); 0=none")
     ap.add_argument("--trust_gain", type=float, default=0.02, help="asker's trust gain when its need is fully covered")
     ap.add_argument("--trust_loss", type=float, default=0.02, help="asker's trust loss when it gets no help")
@@ -54,7 +55,7 @@ def main():
         homophily=args.homophily, opinion_altruism=args.opinion_altruism,
         opinion_trust=args.opinion_trust, extremity_susceptibility=args.extremity_susceptibility,
         trust_half=args.trust_half, influence=args.influence, epsilon=args.epsilon,
-        stubbornness=args.stubbornness, opinion_noise=args.opinion_noise, trust_gain=args.trust_gain,
+        stubbornness=args.stubbornness, opinion_group_shift=args.opinion_group_shift, opinion_noise=args.opinion_noise, trust_gain=args.trust_gain,
         trust_loss=args.trust_loss, trust_reversion=args.trust_reversion,
         disaster_days=tuple(args.disaster_days), disaster_severity=args.disaster_severity,
         disaster_threshold=args.disaster_threshold, disaster_mitigation=args.disaster_mitigation,

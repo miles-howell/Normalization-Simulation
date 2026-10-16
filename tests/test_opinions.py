@@ -95,3 +95,18 @@ def test_wider_confidence_narrows_the_spread():
 
 def test_less_stubbornness_narrows_the_spread():
     assert settled_std(stubbornness=0.05) < settled_std(stubbornness=0.2)
+
+
+def test_group_shift_leans_the_minority_one_way_and_keeps_the_mean():
+    sim = Simulation(Params(N=2000, opinion_group_shift=0.3, seed=5))
+    mino = sim.is_minority
+    assert sim.opinions[mino].mean() == pytest.approx(0.3, abs=0.03)
+    assert sim.opinions[~mino].mean() == pytest.approx(-0.3 * 0.3 / 0.7, abs=0.03)
+    assert sim.opinions.mean() == pytest.approx(0.0, abs=0.02)
+    assert np.array_equal(sim.anchors, sim.opinions)
+
+
+def test_zero_group_shift_leaves_initial_opinions_unchanged():
+    a = Simulation(Params(seed=11))
+    b = Simulation(Params(seed=11, opinion_group_shift=0.0))
+    assert np.array_equal(a.opinions, b.opinions)
