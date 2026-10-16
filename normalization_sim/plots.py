@@ -8,6 +8,8 @@ def plot_metrics(df, outdir):
     plt.figure(figsize=(8,4))
     plt.plot(df["day"], df["stability"], label="Stability")
     plt.plot(df["day"], df["avg_trust"], label="Avg Trust")
+    plt.plot(df["day"], df["avg_trust_in"], label="In-group Trust", linestyle=":")
+    plt.plot(df["day"], df["avg_trust_out"], label="Out-group Trust", linestyle="--")
     plt.plot(df["day"], 1 - df["inequality"], label="(1 - Inequality)")
     plt.legend()
     plt.title("Stability, Trust, and (1 - Inequality) Over Time")
