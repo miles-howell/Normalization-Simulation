@@ -5,7 +5,7 @@ import pandas as pd
 from collections import Counter
 from math import log2
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 from .outliers_config import OUTLIERS
 
 @dataclass
@@ -25,10 +25,20 @@ class Params:
     # Setting these four to 0 decouples opinions from the rest of the model.
     homophily: float = 2.0              # neighbor choice weight *= exp(-homophily * distance)
     opinion_altruism: float = 1.0       # giving capacity *= 1 - opinion_altruism * distance/2
-    opinion_trust: float = 0.03         # extra trust loss per unit distance when no help flows
+    opinion_trust: float = 0.03         # extra trust loss per unit distance when help is refused
     extremity_susceptibility: float = 0.8  # 0..1; infection prob *= (1-w) + w * |o_i - mean| / EXTREMITY_REF
     trust_half: float = 0.05            # giving capacity *= trust / (trust + trust_half); 0 disables
     opinion_noise: float = 0.03         # sd of each agent's daily idiosyncratic opinion drift
+    # Trust only moves when someone needs help; it is split into trust in the own opinion camp and the other one
+    trust_gain: float = 0.02            # asker's trust gain when its need is fully covered
+    trust_loss: float = 0.02            # asker's trust loss when it gets nothing
+    trust_reversion: float = 0.02       # share of the gap to the agent's baseline trust closed each day
+    # Disasters: a hazard that destroys resources unless both opinion camps work together on the response
+    disaster_days: Tuple[int, ...] = () # days on which a disaster strikes (Simulation.trigger_disaster() adds one by hand)
+    disaster_severity: float = 0.5      # share of resources on hand destroyed if the response fails
+    disaster_threshold: float = 0.5     # cooperation (lowest camp's mean out-group trust) needed for the response to work
+    disaster_mitigation: float = 0.75   # share of the damage a working response prevents
+    disaster_trust_shift: float = 0.05  # out-group trust gained when the response works, lost when it fails
     seed: Optional[int] = 7
 
 def gini(x):
@@ -87,6 +97,9 @@ def choose_neighbor(i, candidates, is_minority, affil, cross_pref, opinions=None
 # Mean |o - mean| of the initial N(0, 0.25) opinions; at this spread contagion runs at its configured rate
 EXTREMITY_REF = 0.2
 
+# The giver's trust moves this fraction as much as the receiver's when help flows
+GIVER_TRUST_SHARE = 0.25
+
 # Opinions in [-1, 1] are binned into this many equal-width bins for the diversity metric
 OPINION_BINS = 10
 # Every outlier archetype plus "none"
@@ -105,7 +118,10 @@ class Simulation:
 
         self.opinions = np.random.normal(0, 0.25, N).clip(-1, 1)
         self.altruism = np.clip(np.random.normal(0.1, 0.05, N), 0, 0.6)
-        self.trust = np.clip(np.random.normal(0.6, 0.1, N), 0, 1)
+        # Each agent's generalized trust; trust in each camp starts there and drifts back to it
+        self.trust_base = np.clip(np.random.normal(0.6, 0.1, N), 0, 1)
+        self.trust_in = self.trust_base.copy()   # trust in agents on the same side of 0 in opinion
+        self.trust_out = self.trust_base.copy()  # trust in agents on the other side
         self.affil = np.array(["none"] * N, dtype=object)
 
         # Random graph
@@ -128,11 +144,46 @@ class Simulation:
         self.resources = np.zeros(N)
 
         self.history: Dict[str, list] = {k: [] for k in [
-            "day","stability","inequality","diversity","avg_trust",
+            "day","stability","inequality","diversity","avg_trust","avg_trust_in","avg_trust_out",
             "minority_starvation_rate","majority_starvation_rate",
             "overall_starvation_rate","affil_entropy","mean_opinion",
-            "opinion_std"
+            "opinion_std","disaster_loss","disaster_cooperation"
         ]}
+        self._disaster_pending = False
+
+    def same_camp(self, i, j):
+        """True if agents i and j hold opinions on the same side of 0, i.e. are each other's in-group."""
+        return (self.opinions[i] >= 0) == (self.opinions[j] >= 0)
+
+    def trust_toward(self, i, j):
+        """Agent i's trust in agent j: in-group or out-group trust depending on their opinion camps."""
+        return self.trust_in[i] if self.same_camp(i, j) else self.trust_out[i]
+
+    def trigger_disaster(self):
+        """Make a disaster strike at the start of the next step."""
+        self._disaster_pending = True
+
+    def disaster_cooperation(self):
+        """How well the camps can respond together: the lowest camp's mean willingness to work with the other.
+
+        An agent's willingness is its out-group trust. The response is only as strong as the less willing camp.
+        If everyone is in one camp there is no divide to bridge, so in-group trust is used instead.
+        """
+        camp = self.opinions >= 0
+        if camp.all() or not camp.any():
+            return float(self.trust_in.mean())
+        return float(min(self.trust_out[camp].mean(), self.trust_out[~camp].mean()))
+
+    def _strike_disaster(self, resources):
+        """Destroy part of everyone's resources on hand; returns (share lost, cooperation)."""
+        cooperation = self.disaster_cooperation()
+        works = cooperation >= self.p.disaster_threshold
+        loss = self.p.disaster_severity * (1.0 - self.p.disaster_mitigation if works else 1.0)
+        resources *= 1.0 - loss
+        # Working together builds trust across the divide; failing together erodes it
+        shift = self.p.disaster_trust_shift if works else -self.p.disaster_trust_shift
+        self.trust_out = np.clip(self.trust_out + shift, 0, 1)
+        return loss, cooperation
 
     def step(self, day: int):
         N = self.p.N
@@ -179,6 +230,11 @@ class Simulation:
         # What each agent has on hand today: savings plus today's income
         resources = self.resources + income
 
+        disaster_loss, disaster_cooperation = 0.0, float("nan")
+        if self._disaster_pending or day in self.p.disaster_days:
+            self._disaster_pending = False
+            disaster_loss, disaster_cooperation = self._strike_disaster(resources)
+
         effective_altruism = np.clip(self.altruism + altruism_delta, 0, 0.9)
 
         # One interaction per agent
@@ -192,24 +248,38 @@ class Simulation:
             bonus = ingroup_bonus[i] if in_group else 0.0
             # Opinion distance in [0, 2]
             dist = abs(self.opinions[i] - self.opinions[j])
+            same_camp = self.same_camp(i, j)
+            # The pair's trust in each other is in-group trust on both sides or out-group trust on both
+            trust = self.trust_in if same_camp else self.trust_out
             need = max(self.p.survival_floor - resources[j], 0)
             give_cap = resources[i] * (effective_altruism[i] + bonus)
             give_cap *= max(1.0 - self.p.opinion_altruism * dist / 2.0, 0.0)
             if self.p.trust_half > 0:
                 # Agents who have lost trust in others stop sharing
-                give_cap *= self.trust[i] / (self.trust[i] + self.p.trust_half)
+                give_cap *= trust[i] / (trust[i] + self.p.trust_half)
             transfer = min(need, give_cap)
             if transfer > 0:
                 resources[i] -= transfer
                 resources[j] += transfer
                 gave[i] += transfer
                 received[j] += transfer
-                self.trust[i] = np.clip(self.trust[i] + 0.02 + trust_delta[i], 0, 1)
-                self.trust[j] = np.clip(self.trust[j] + 0.02 + trust_delta[j], 0, 1)
-            else:
-                disagreement = self.p.opinion_trust * dist
-                self.trust[i] = np.clip(self.trust[i] - 0.005 - disagreement - max(0, -trust_delta[i]), 0, 1)
-                self.trust[j] = np.clip(self.trust[j] - 0.005 - disagreement - max(0, -trust_delta[j]), 0, 1)
+            if need > 0:
+                # Trust only moves when help is needed: the asker gains trust by the share of its need
+                # that was covered and loses it by the share that was refused; the giver gains a little.
+                # Archetypes' trust boosts apply to everyone, their suspicion only to the other camp.
+                td_i = trust_delta[i] if (trust_delta[i] > 0 or not same_camp) else 0.0
+                td_j = trust_delta[j] if (trust_delta[j] > 0 or not same_camp) else 0.0
+                covered = transfer / need
+                gain = self.p.trust_gain + td_j
+                loss = self.p.trust_loss + self.p.opinion_trust * dist + max(0, -td_j)
+                trust[j] = np.clip(trust[j] + covered * gain - (1 - covered) * loss, 0, 1)
+                if transfer > 0:
+                    trust[i] = np.clip(trust[i] + GIVER_TRUST_SHARE * (self.p.trust_gain + td_i), 0, 1)
+
+        # Trust is a stable trait: it slowly returns to each agent's baseline
+        r = self.p.trust_reversion
+        self.trust_in += r * (self.trust_base - self.trust_in)
+        self.trust_out += r * (self.trust_base - self.trust_out)
 
         # Policy pushes minority up a bit (and maybe majority down slightly)
         self.base_minority = max(0.2, min(1.2, self.base_minority + policy_push * 0.02))
@@ -221,7 +291,7 @@ class Simulation:
             neigh = np.where(self.adj[i] == 1)[0]
             if len(neigh) > 0:
                 j = np.random.choice(neigh)
-                influence = (self.trust[i] + self.trust[j]) / 4.0
+                influence = (self.trust_toward(i, j) + self.trust_toward(j, i)) / 4.0
                 new_op[i] += influence * (self.opinions[j] - self.opinions[i])
 
         mean_op = new_op.mean()
@@ -269,13 +339,17 @@ class Simulation:
         self.history["stability"].append(stability)
         self.history["inequality"].append(float(ineq))
         self.history["diversity"].append(float(diversity))
-        self.history["avg_trust"].append(float(self.trust.mean()))
+        self.history["avg_trust"].append(float((self.trust_in + self.trust_out).mean() / 2))
+        self.history["avg_trust_in"].append(float(self.trust_in.mean()))
+        self.history["avg_trust_out"].append(float(self.trust_out.mean()))
         self.history["minority_starvation_rate"].append(minority_starvation)
         self.history["majority_starvation_rate"].append(majority_starvation)
         self.history["overall_starvation_rate"].append(starvation)
         self.history["affil_entropy"].append(float(aff_ent))
         self.history["mean_opinion"].append(float(self.opinions.mean()))
         self.history["opinion_std"].append(float(self.opinions.std()))
+        self.history["disaster_loss"].append(disaster_loss)
+        self.history["disaster_cooperation"].append(disaster_cooperation)
 
         # Eat, then carry what is left over to tomorrow
         self.resources = np.maximum(resources - self.p.survival_floor, 0.0) * (1.0 - self.p.resource_decay)

@@ -1,12 +1,14 @@
 
 # Predefined outlier archetypes and their behavioral effects.
 # Tune these values to shape narrative outcomes.
+# trust_delta is added to a member's trust change whenever it asks for or gives help:
+# a positive value applies to everyone, a negative one (suspicion) only toward the other opinion camp.
 
 OUTLIERS = {
     "social_justice": {
         "infection": 0.015,          # chance per day to adopt if neighbor has it
         "altruism_delta": +0.20,     # more sharing, esp. to minority
-        "trust_delta": +0.03,        # small trust boost when transfers occur
+        "trust_delta": +0.03,        # small trust boost when help flows
         "cross_pref": +0.25,         # seeks cross-group ties
         "policy_push": +0.02,        # raises minority base resources (slowly)
         "polarization": -0.05,       # slightly reduces opinion polarization

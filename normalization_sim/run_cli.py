@@ -20,10 +20,18 @@ def main():
     ap.add_argument("--shock_sd", type=float, default=0.25, help="daily resource shock (lognormal sd); 0=none")
     ap.add_argument("--homophily", type=float, default=2.0, help="preference for like-minded partners")
     ap.add_argument("--opinion_altruism", type=float, default=1.0, help="how much opinion distance cuts giving")
-    ap.add_argument("--opinion_trust", type=float, default=0.03, help="trust loss per unit opinion distance")
+    ap.add_argument("--opinion_trust", type=float, default=0.03, help="extra trust loss per unit opinion distance when help is refused")
     ap.add_argument("--extremity_susceptibility", type=float, default=0.8, help="0..1; how much distance from the mean drives outlier recruitment")
     ap.add_argument("--trust_half", type=float, default=0.05, help="trust level at which giving is halved; 0=trust doesn't gate giving")
     ap.add_argument("--opinion_noise", type=float, default=0.03, help="daily personal opinion drift (sd); 0=none")
+    ap.add_argument("--trust_gain", type=float, default=0.02, help="asker's trust gain when its need is fully covered")
+    ap.add_argument("--trust_loss", type=float, default=0.02, help="asker's trust loss when it gets no help")
+    ap.add_argument("--trust_reversion", type=float, default=0.02, help="share of the gap to baseline trust closed each day; 0=none")
+    ap.add_argument("--disaster_days", type=int, nargs="*", default=[], help="days on which a disaster strikes, e.g. --disaster_days 60 100")
+    ap.add_argument("--disaster_severity", type=float, default=0.5, help="share of resources on hand destroyed if the response fails")
+    ap.add_argument("--disaster_threshold", type=float, default=0.5, help="cooperation (lowest camp's mean out-group trust) the response needs")
+    ap.add_argument("--disaster_mitigation", type=float, default=0.75, help="share of the damage a working response prevents")
+    ap.add_argument("--disaster_trust_shift", type=float, default=0.05, help="out-group trust gained/lost when the response works/fails")
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--outdir", type=str, default="outputs/exp1")
     args = ap.parse_args()
@@ -37,7 +45,11 @@ def main():
         engagement=args.engagement, p_edge=args.p_edge, shock_sd=args.shock_sd,
         homophily=args.homophily, opinion_altruism=args.opinion_altruism,
         opinion_trust=args.opinion_trust, extremity_susceptibility=args.extremity_susceptibility,
-        trust_half=args.trust_half, opinion_noise=args.opinion_noise, seed=args.seed
+        trust_half=args.trust_half, opinion_noise=args.opinion_noise, trust_gain=args.trust_gain,
+        trust_loss=args.trust_loss, trust_reversion=args.trust_reversion,
+        disaster_days=tuple(args.disaster_days), disaster_severity=args.disaster_severity,
+        disaster_threshold=args.disaster_threshold, disaster_mitigation=args.disaster_mitigation,
+        disaster_trust_shift=args.disaster_trust_shift, seed=args.seed
     )
     sim = Simulation(p)
     df = sim.run()
