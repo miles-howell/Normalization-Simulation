@@ -1,10 +1,9 @@
 
 import os
 import argparse
-import numpy as np
 import pandas as pd
 from .sim import Params, Simulation
-from .plots import plot_metrics, animate_agents
+from .plots import plot_metrics
 
 def main():
     ap = argparse.ArgumentParser()
@@ -26,8 +25,6 @@ def main():
     ap.add_argument("--trust_half", type=float, default=0.05, help="trust level at which giving is halved; 0=trust doesn't gate giving")
     ap.add_argument("--opinion_noise", type=float, default=0.03, help="daily personal opinion drift (sd); 0=none")
     ap.add_argument("--seed", type=int, default=7)
-    ap.add_argument("--animate", type=int, default=0, help="1 to output agents_anim.gif")
-    ap.add_argument("--frameskip", type=int, default=3)
     ap.add_argument("--outdir", type=str, default="outputs/exp1")
     args = ap.parse_args()
 
@@ -51,23 +48,6 @@ def main():
 
     # Plots
     plot_metrics(df, args.outdir)
-
-    # Optional animation
-    if args.animate:
-        # generate simple traces (random fixed layout)
-        rng = np.random.default_rng(args.seed)
-        x = rng.random(p.N)
-        y = rng.random(p.N)
-        traces = []
-        # reconstruct approximate per-day resources path from metrics proxies isn't available;
-        # so we approximate sizes uniformly here for demo purposes.
-        # If you want exact resources per day, extend Simulation to record them.
-        mean_res = np.ones(p.days)  # placeholder for size scaling
-        for day in range(p.days):
-            # simple stand-in vector; could be enhanced to track real per-agent states
-            traces.append({"day": int(df.iloc[day]["day"]), "x": x, "y": y,
-                           "affiliation": None, "resources": np.ones(p.N)})
-        animate_agents(traces, args.outdir, frameskip=args.frameskip)
 
     print(f"Saved metrics and plots to: {args.outdir}")
 
