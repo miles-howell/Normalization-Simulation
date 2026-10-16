@@ -56,7 +56,7 @@ def test_stubbornness_is_drawn_around_its_mean():
 # --- whole runs ----------------------------------------------------------------
 
 def without_groups(**kw):
-    """A run with no outlier groups, whose polarization would otherwise keep widening the spread (issue #18)."""
+    """A run with no outlier groups, so only peers, the feed and anchoring move opinions."""
     sim = Simulation(Params(**{"N": 120, "days": 150, **kw}))
     sim.affil[:] = "none"
     return sim

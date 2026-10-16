@@ -8,7 +8,7 @@ It’s designed to be **simple, hackable, and visual**—ideal for iterative exp
 ## Features
 - Agents split into **majority** and **minority** (with unequal daily incomes).
 - A **persistent resource economy**: agents earn, help each other, eat, and carry savings over to the next day (see below).
-- **Outlier archetypes** that affect altruism, trust, cross-group interactions, polarization, and policy pressure.
+- **Outlier archetypes** that affect altruism, trust, cross-group interactions, polarization, and policy pressure. Groups recruit through several contacts, mainly from agents near their opinion position, and lose members again (see "Outlier groups").
 - **Normalization dial (lambda)**: the share of attention agents give to an algorithmic **feed** rather than their peers. The feed shows mainstream content (normalizing) or, in **engagement mode**, content a bit more extreme than the viewer plus outrage that erodes trust in the other side (see "The feed").
 - **Anchored opinions with bounded confidence** (Friedkin–Johnsen): agents keep being pulled back to their initial view and ignore partners whose opinions are too far from their own (see "Opinion dynamics").
 - **Opinions feed back into behavior** (see below), so opinions can move trust, starvation and stability, not just opinion stats.
@@ -97,8 +97,8 @@ When one strikes (before the day's mutual aid):
 4. Working together raises everyone's out-group trust by `--disaster_trust_shift`; failing together lowers it by the same amount. Repeated failures therefore make the next response more likely to fail.
 
 The disaster days are marked with gray vertical lines in both plots.
-These defaults are not tuned. With the normalizing feed, cooperation at the end of a 150-day run sits around 0.54, so the response works.
-The engagement feed's outrage pulls it below the threshold (0.48 at `--lambda_ 0.15`, 0.32 at 0.5), so disasters there fail and each failure lowers out-group trust further (see "The feed").
+These defaults are not tuned. With the normalizing feed, cooperation at the end of a 150-day run sits around 0.61, so the response works.
+The engagement feed's outrage pulls it below the threshold (0.49 at `--lambda_ 0.15`, 0.32 at 0.5), so disasters there fail and each failure lowers out-group trust further (see "The feed").
 A policy for when disasters strike automatically is left for later.
 
 ## How opinions feed back into the model
@@ -110,13 +110,13 @@ Each day peers, the feed (`--lambda_`, `--engagement`) and the outlier groups re
 | Homophily | Partner choice weight × `exp(-homophily · d)` | `--homophily` (2.0) |
 | Altruism | Giving capacity × `1 - opinion_altruism · d/2` (people help those they agree with) | `--opinion_altruism` (1.0) |
 | Trust | When help is refused, the asker's trust drops by an extra `opinion_trust · d` | `--opinion_trust` (0.03) |
-| Contagion | Outlier recruitment probability × `(1-w) + w · |o_i - mean| / 0.2`: agents far from the mainstream are easier to recruit, consensus slows recruitment | `--extremity_susceptibility` (0.8) |
+| Recruitment | Each group's daily join chance × ideological fit to the group's `position` × `(1-w) + w · |o_i - mean| / 0.2`: agents far from the mainstream are easier to recruit, consensus slows recruitment (see "Outlier groups") | `--extremity_susceptibility` (0.8) |
 | Trust gates giving | Giving capacity × `trust / (trust + trust_half)`, using the giver's in- or out-group trust: low-trust agents stop sharing, so the trust effect reaches resources | `--trust_half` (0.05) |
 
 The intended causal chain: normalizing feed → small opinion distances → more giving and fewer refusals → more trust and aid → lower starvation and higher stability.
 Engagement feed → two camps drift apart and outrage erodes out-group trust → help across the divide stops, joint disaster responses fail, recruitment into outlier groups speeds up → higher starvation, lower stability.
 
-In practice the opinion and trust links are clearly visible, but the effect on starvation and stability is still within seed noise (see the results table under "The feed"): the minority's built-in income gap dominates both, and most aid already goes to like-minded partners.
+In practice the opinion and trust links are clearly visible. Minority starvation now responds too, mostly through the groups: under the engagement feed more agents join the hoarding `political_extremists` and fewer the sharing `social_justice`, and minority starvation rises from 0.47 (0.43–0.49 over seeds) to 0.54–0.56 (see the results table under "The feed"). Stability barely moves: the minority's built-in income gap dominates it, and most aid already goes to like-minded partners.
 Setting `homophily`, `opinion_altruism`, `opinion_trust` and `extremity_susceptibility` to 0 decouples opinions from everything else.
 
 ## Opinion dynamics
@@ -131,7 +131,7 @@ Opinions therefore follow a Friedkin–Johnsen model with bounded confidence. Ev
 6. Optional personal drift `--opinion_noise` (default 0) is added, and opinions are clipped to [-1, 1].
 
 Because of the anchors, opinions do not collapse to consensus and need no noise to stay apart: the settled spread comes from how spread out the anchors are, and agents keep their own views.
-With no outlier groups and the default normalizing feed, peer influence, the feed and anchoring settle in about six weeks (33–48 days) at a spread of about 0.18 (from 0.25 at the start).
+With no outlier groups and the default normalizing feed, peer influence, the feed and anchoring settle in about six weeks (32–53 days) at a spread of about 0.18 (from 0.25 at the start).
 Raising `--epsilon` or lowering `--stubbornness` narrows the spread, the reverse widens it (no outlier groups, 6 seeds, last 50 days):
 
 | change from the defaults | opinion_std, normalizing feed (`--lambda_ 0.15`) | opinion_std, engagement feed (`--lambda_ 0.5 --engagement 1`) |
@@ -161,38 +161,87 @@ This toy **exaggerates the feed for teaching**: at the default 15% attention it 
 
 Typical results (150 days, mean of the last 50 days over seeds 3, 7, 11, 23, 42, 99; "at bounds" is `extreme_share`, the share of agents with |opinion| ≥ 0.9; "middle" the share with |opinion| < 0.1 at the end; "rise" is how much `opinion_std` grew between days 50–100 and 100–150; "coop." the disaster cooperation at the end):
 
-| run | opinion_std (range over seeds) | rise | at bounds | middle | avg_trust_in | avg_trust_out | coop. | minority_starvation_rate | stability |
-|---|---|---|---|---|---|---|---|---|---|
-| `--lambda_ 0` (no feed) | 0.570 (0.52–0.61) | +0.07 | 0.21 | 0.16 | 0.639 | 0.550 | 0.54 | 0.544 | 0.535 |
-| `--lambda_ 0.15` (default) | 0.484 (0.39–0.59) | +0.08 | 0.15 | 0.22 | 0.639 | 0.554 | 0.54 | 0.548 | 0.535 |
-| `--lambda_ 0.5` | 0.315 (0.28–0.39) | +0.04 | 0.05 | 0.38 | 0.636 | 0.549 | 0.54 | 0.552 | 0.535 |
-| `--lambda_ 0.15 --engagement 1` | 0.671 (0.61–0.72) | +0.05 | 0.29 | 0.05 | 0.640 | 0.486 | 0.48 | 0.545 | 0.535 |
-| `--lambda_ 0.5 --engagement 1` | 0.756 (0.74–0.78) | +0.00 | 0.36 | 0.01 | 0.651 | 0.336 | 0.32 | 0.536 | 0.536 |
+| run | opinion_std (range over seeds) | rise | at bounds | middle | in a group (range) | avg_trust_in | avg_trust_out | coop. | minority_starvation_rate | stability |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `--lambda_ 0` (no feed) | 0.307 (0.26–0.35) | +0.03 | 0.01 | 0.27 | 0.47 (0.43–0.50) | 0.665 | 0.603 | 0.58 | 0.486 | 0.542 |
+| `--lambda_ 0.15` (default) | 0.231 (0.20–0.26) | +0.00 | 0.00 | 0.40 | 0.38 (0.29–0.45) | 0.671 | 0.618 | 0.61 | 0.466 | 0.544 |
+| `--lambda_ 0.5` | 0.180 (0.16–0.20) | -0.00 | 0.00 | 0.51 | 0.27 (0.14–0.35) | 0.671 | 0.631 | 0.61 | 0.466 | 0.544 |
+| `--lambda_ 0.15 --engagement 1` | 0.552 (0.45–0.61) | +0.10 | 0.12 | 0.05 | 0.65 (0.59–0.69) | 0.646 | 0.503 | 0.49 | 0.537 | 0.536 |
+| `--lambda_ 0.5 --engagement 1` | 0.735 (0.68–0.77) | +0.04 | 0.29 | 0.01 | 0.73 (0.67–0.78) | 0.634 | 0.336 | 0.32 | 0.564 | 0.533 |
+
+("in a group" is the share of agents in any outlier group over the last 50 days.)
 
 The same runs with the outlier groups removed (`sim.affil[:] = "none"` before `run()`), so only peers, the feed and anchoring move opinions:
 
 | run | opinion_std (range over seeds) | settles by (day) | at bounds | middle | anchor corr. | avg_trust_out | coop. |
 |---|---|---|---|---|---|---|---|
-| `--lambda_ 0` | 0.204 (0.18–0.22) | 50 (39–68) | 0.00 | 0.42 | 0.98 | 0.649 | 0.64 |
-| `--lambda_ 0.15` | 0.184 (0.17–0.20) | 40 (33–48) | 0.00 | 0.48 | 0.96 | 0.653 | 0.65 |
-| `--lambda_ 0.5` | 0.154 (0.14–0.17) | 32 (19–58) | 0.00 | 0.57 | 0.94 | 0.656 | 0.65 |
-| `--lambda_ 0.15 --engagement 1` | 0.286 (0.27–0.30) | 106 (88–150) | 0.00 | 0.16 | 0.96 | 0.571 | 0.56 |
-| `--lambda_ 0.5 --engagement 1` | 0.472 (0.45–0.49) | 55 (51–58) | 0.03 | 0.01 | 0.87 | 0.390 | 0.38 |
+| `--lambda_ 0` | 0.204 (0.18–0.22) | 52 (41–71) | 0.00 | 0.41 | 0.97 | 0.649 | 0.65 |
+| `--lambda_ 0.15` | 0.184 (0.17–0.20) | 39 (32–53) | 0.00 | 0.47 | 0.96 | 0.652 | 0.65 |
+| `--lambda_ 0.5` | 0.154 (0.14–0.17) | 31 (22–42) | 0.00 | 0.57 | 0.94 | 0.655 | 0.65 |
+| `--lambda_ 0.15 --engagement 1` | 0.286 (0.27–0.30) | 109 (95–150) | 0.00 | 0.16 | 0.96 | 0.569 | 0.56 |
+| `--lambda_ 0.5 --engagement 1` | 0.472 (0.45–0.48) | 54 (53–57) | 0.03 | 0.01 | 0.87 | 0.389 | 0.37 |
 
 ("settles by" is the first day after which `opinion_std` stays closer to its final level than 10% of its total change.)
 
 What this shows:
 
-- **The engagement feed builds echo chambers, not a society pinned at ±1.** The old engagement mode pushed everyone 15% a day away from the mean and ended with an opinion std of 0.99, nearly everyone at a bound. Now the middle empties out (1% of agents within 0.1 of the center at `--lambda_ 0.5`, against 42% without a feed) and two separated camps form. Without outlier groups only 3% end up at the bounds: mostly agents with almost no stubbornness, which keep following ever more extreme content until there is none left.
+- **The engagement feed builds echo chambers, not a society pinned at ±1.** The old engagement mode pushed everyone 15% a day away from the mean and ended with an opinion std of 0.99, nearly everyone at a bound. Now the middle empties out (1% of agents within 0.1 of the center at `--lambda_ 0.5`, against 41% without a feed) and two separated camps form. Without outlier groups only 3% end up at the bounds: mostly agents with almost no stubbornness, which keep following ever more extreme content until there is none left.
 - **The normalizing feed's effect on opinion spread is moderate.** 15% attention lowers the spread by about 15%, half of all attention by about 45%. It never produces consensus, because agents far from the mainstream ignore it (bounded confidence) and everyone keeps being pulled back to their anchor.
-- **The dial's effect on trust shows up in out-group trust and cooperation.** The engagement feed's outrage lowers out-group trust (0.55 → 0.49 at 15% attention, 0.34 at 50%), while in-group trust is unchanged. That pushes disaster cooperation below the 0.5 threshold, so joint responses fail. The normalizing feed leaves trust where it is.
-- **Starvation and stability barely move.** Minority starvation stays at 0.54–0.55 in every setting, within seed noise: the minority's income gap dominates it, and aid mostly flows between like-minded partners anyway.
-- **With the outlier groups, the spread is still rising at day 150 in every setting.** The archetypes' `polarization` grows with their membership, and almost everyone joins a group (issue #18). The old dial hid this with a direct 15%-a-day pull toward the mean; the feed does not, so even the default run polarizes (0.48, with 15% of agents at the bounds). The extremes there come from the groups, not the feed.
+- **The dial's effect on trust shows up in out-group trust and cooperation.** The engagement feed's outrage lowers out-group trust (0.62 → 0.50 at 15% attention, 0.34 at 50%), while in-group trust barely moves. That pushes disaster cooperation below the 0.5 threshold, so joint responses fail. The normalizing feed leaves trust where it is.
+- **Starvation responds through the groups, stability barely moves.** Minority starvation is 0.47–0.49 with no feed or a normalizing one and 0.54–0.56 with the engagement feed, which fills the hoarding `political_extremists` and empties the sharing `social_justice` (see "Outlier groups"). The ranges over seeds only just touch at 15% attention and are apart at 50%. Without the groups the feed leaves starvation unchanged: the minority's income gap dominates it, and aid mostly flows between like-minded partners anyway.
+- **With the outlier groups, opinions settle under a normalizing feed and keep polarizing under the engagement feed.** Members are pulled toward their group's position and the archetypes' `polarization` grows with membership, so the groups widen the spread (0.23 against 0.18 without them at the default). Under the engagement feed membership climbs to 65–73%, mostly in the two fringe groups, and the spread is still rising at day 150.
 
-**Tradeoff kept visible on purpose.** Agents far from the mainstream are easier to recruit into *any* outlier group (`--extremity_susceptibility`), including `social_justice`, whose `policy_push` raises minority income. A normalizing feed therefore also slows the dissent that helps the minority: at `--lambda_ 0.5`, 18% of agents end up in `social_justice` against 21% without a feed. With today's recruitment almost everyone still joins some group, so the effect is small; issue #18 decides how strong it should be.
+**Tradeoff kept visible on purpose.** Agents far from the mainstream are easier to recruit into *any* outlier group (`--extremity_susceptibility`), including `social_justice`, whose `policy_push` raises minority income. A normalizing feed therefore also slows the dissent that helps the minority: `social_justice` ends at 13% of agents without a feed, 10% at the default and 4% at `--lambda_ 0.5`. Minority starvation barely changes with it (0.49 → 0.47), because the feed shrinks the hoarding `political_extremists` just as much.
 
-Trust settles within the run: the last 50 days differ from the 50 before by at most 0.03, and the seeds agree to within ±0.03.
+Trust settles within the run with no feed or a normalizing one: the last 50 days differ from the 50 before by at most 0.02, and the seeds agree to within ±0.03. Under the engagement feed out-group trust is still falling slowly (by up to 0.05), as more agents join the suspicious fringe groups.
 Inequality (about 0.31) and stability are dominated by the gap between majority savings and the minority's hand-to-mouth income in every setting.
+
+## Outlier groups
+Members of extreme or high-commitment groups stay a small minority, they are recruited through several close ties rather than one exposure (complex contagion; Centola & Macy 2007, Stark & Lofland), mostly from people who already lean their way, and most of them leave again (Barker's study of the Unification Church).
+Each archetype in `outliers_config.py` therefore has, besides its behavioral effects:
+
+| setting | meaning |
+|---|---|
+| `join_threshold` | share of an agent's neighbors who must be members before it can join at all. Agents have about 28 neighbors, so 0.05 means 2 member contacts and 0.08 means 3 |
+| `infection` | daily chance of joining once the threshold is met, at full fit and susceptibility 1 |
+| `position`, `fit_width` | the opinion the group stands for. Fit is `exp(-((o - position) / fit_width)² / 2)`: 1 at the position, 0.6 one `fit_width` away |
+| `opinion_pull` | daily share of the way a member's opinion moves toward `position` (group polarization), applied before anchoring |
+| `exit_rate` | daily chance of leaving back to `"none"`: half of it for members who fit the group, up to 1.5 times it for those who no longer do (`exit_rate · (1.5 - fit)`) |
+| `seed_size` | members at the start: the agent closest to `position` and its neighbors closest to `position`, so each group starts as a local cluster |
+
+Every day, from yesterday's memberships:
+
+1. Each unaffiliated agent's hazard for group k is `infection · fit · susceptibility` if its share of neighbors in k reaches `join_threshold`, else 0 (susceptibility is the extremity factor under "How opinions feed back into the model").
+2. It joins at most one group: some group with chance `1 - Π(1 - hazard_k)`, split between the groups in proportion to their hazards. The order of `OUTLIERS` doesn't matter.
+3. Each member leaves with its exit chance. Members are never recruited directly into another group; switching means leaving and joining again later.
+
+| archetype | position | join_threshold (contacts) | infection | exit_rate | opinion_pull |
+|---|---|---|---|---|---|
+| `social_justice` | −0.35 | 0.05 (2) | 0.015 | 0.03 | 0.03 |
+| `environmentalists` | −0.10 | 0.05 (2) | 0.012 | 0.04 | 0.02 |
+| `antivaxx_misinfo` | +0.30 | 0.05 (2) | 0.015 | 0.03 | 0.04 |
+| `political_extremists` | +0.55 | 0.06 (2) | 0.035 | 0.02 | 0.05 |
+| `religious_cult` | −0.60 | 0.08 (3) | 0.04 | 0.01 | 0.04 |
+
+These are narrative choices, tuned so that most agents stay out of every group: broad, low-cost movements sit near the middle and turn over fast, the extremists and the cult sit on the fringes and are stickier.
+
+Share of agents in each group at day 150 (mean and range over seeds 3, 7, 11, 23, 42, 99):
+
+| run | in a group | `social_justice` | `environmentalists` | `antivaxx_misinfo` | `political_extremists` | `religious_cult` |
+|---|---|---|---|---|---|---|
+| `--lambda_ 0` | 0.47 | 0.13 (0.04–0.20) | 0.08 (0.05–0.13) | 0.09 (0.01–0.15) | 0.15 (0.08–0.25) | 0.03 (0.02–0.04) |
+| `--lambda_ 0.15` | 0.38 | 0.10 (0.03–0.15) | 0.12 (0.01–0.17) | 0.09 (0.01–0.16) | 0.08 (0.01–0.15) | 0.01 (0.00–0.02) |
+| `--lambda_ 0.5` | 0.27 | 0.04 (0.00–0.09) | 0.09 (0.00–0.14) | 0.10 (0.01–0.17) | 0.04 (0.00–0.07) | 0.01 (0.00–0.03) |
+| `--lambda_ 0.15 --engagement 1` | 0.65 | 0.11 (0.05–0.19) | 0.02 (0.00–0.05) | 0.06 (0.01–0.09) | 0.27 (0.22–0.34) | 0.19 (0.03–0.30) |
+| `--lambda_ 0.5 --engagement 1` | 0.73 | 0.04 (0.01–0.10) | 0.00 (0.00–0.00) | 0.02 (0.00–0.04) | 0.33 (0.29–0.35) | 0.34 (0.25–0.37) |
+
+("in a group" is the mean over the last 50 days, as in the table under "The feed".)
+
+- **Most agents stay out with no feed or a normalizing one, and membership levels off with churn.** About 1–2% of agents join or leave on any day; at the default, membership rises by 0.05 between days 50–100 and 100–150 and levels off at around 0.4 in longer runs.
+- **Opinion position predicts the group.** Members' initial opinions are ordered like the groups' positions, so recruitment sorts agents by ideology before membership pulls them further.
+- **The feed decides which groups grow.** A normalizing feed keeps opinions near the middle, where only the broad movements find recruits; the engagement feed drives agents to the fringes, where the extremists and the cult recruit, and the moderate groups lose their members.
+- **Individual groups are fragile, totals are not.** Because joining needs several contacts, a group that doesn't reach enough of its pool early can fade (the 0.00–0.01 lower ends above): a tipping point, as in complex contagion. Overall membership is similar across seeds.
+- Group effects (`policy_push`, `polarization`, `public_good`) still scale with membership share, but no longer saturate, since membership stays well below everyone.
 
 ## Outputs
 - `metrics.csv` with all tracked metrics.
