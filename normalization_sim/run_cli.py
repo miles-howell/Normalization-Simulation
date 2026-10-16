@@ -23,7 +23,10 @@ def main():
     ap.add_argument("--opinion_trust", type=float, default=0.03, help="extra trust loss per unit opinion distance when help is refused")
     ap.add_argument("--extremity_susceptibility", type=float, default=0.8, help="0..1; how much distance from the mean drives outlier recruitment")
     ap.add_argument("--trust_half", type=float, default=0.05, help="trust level at which giving is halved; 0=trust doesn't gate giving")
-    ap.add_argument("--opinion_noise", type=float, default=0.03, help="daily personal opinion drift (sd); 0=none")
+    ap.add_argument("--influence", type=float, default=0.05, help="daily share of the way toward a partner's opinion, times the pair's mean trust")
+    ap.add_argument("--epsilon", type=float, default=0.5, help="bounded confidence: partners further apart in opinion than this have no influence")
+    ap.add_argument("--stubbornness", type=float, default=0.1, help="mean daily pull back toward each agent's initial opinion (0..1)")
+    ap.add_argument("--opinion_noise", type=float, default=0.0, help="daily personal opinion drift (sd); 0=none")
     ap.add_argument("--trust_gain", type=float, default=0.02, help="asker's trust gain when its need is fully covered")
     ap.add_argument("--trust_loss", type=float, default=0.02, help="asker's trust loss when it gets no help")
     ap.add_argument("--trust_reversion", type=float, default=0.02, help="share of the gap to baseline trust closed each day; 0=none")
@@ -45,7 +48,8 @@ def main():
         engagement=args.engagement, p_edge=args.p_edge, shock_sd=args.shock_sd,
         homophily=args.homophily, opinion_altruism=args.opinion_altruism,
         opinion_trust=args.opinion_trust, extremity_susceptibility=args.extremity_susceptibility,
-        trust_half=args.trust_half, opinion_noise=args.opinion_noise, trust_gain=args.trust_gain,
+        trust_half=args.trust_half, influence=args.influence, epsilon=args.epsilon,
+        stubbornness=args.stubbornness, opinion_noise=args.opinion_noise, trust_gain=args.trust_gain,
         trust_loss=args.trust_loss, trust_reversion=args.trust_reversion,
         disaster_days=tuple(args.disaster_days), disaster_severity=args.disaster_severity,
         disaster_threshold=args.disaster_threshold, disaster_mitigation=args.disaster_mitigation,

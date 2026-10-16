@@ -10,6 +10,7 @@ It’s designed to be **simple, hackable, and visual**—ideal for iterative exp
 - A **persistent resource economy**: agents earn, help each other, eat, and carry savings over to the next day (see below).
 - **Outlier archetypes** that affect altruism, trust, cross-group interactions, polarization, and policy pressure.
 - **Normalization dial (lambda)**: pull opinions toward the mean (or flip to an **engagement mode** that amplifies extremes).
+- **Anchored opinions with bounded confidence** (Friedkin–Johnsen): agents keep being pulled back to their initial view and ignore partners whose opinions are too far from their own (see "Opinion dynamics").
 - **Opinions feed back into behavior** (see below), so opinions can move trust, starvation and stability, not just opinion stats.
 - Daily **resource shocks** (good/bad harvest days) so mutual aid actually matters.
 - Track metrics each day: **stability**, **inequality (Gini)**, **opinion diversity (entropy)**, **affiliation diversity**, **average trust** (overall, in-group and out-group), **starvation rate** (minority, majority and overall), **opinion mean/std**.
@@ -41,7 +42,8 @@ It’s designed to be **simple, hackable, and visual**—ideal for iterative exp
 - `--resource_decay` (default 0.1): share of savings lost each day (spoilage/depreciation); 1 = no savings
 - `--shock_sd` (daily lognormal resource shock; default 0.25, 0=none)
 - `--homophily`, `--opinion_altruism`, `--opinion_trust`, `--extremity_susceptibility`, `--trust_half` (opinion feedback strengths; see below)
-- `--opinion_noise` (daily personal opinion drift; default 0.03, 0=none)
+- `--influence` (default 0.05), `--epsilon` (default 0.5), `--stubbornness` (default 0.1): how strongly partners pull on opinions, how far apart two opinions can be before the partner is ignored, and how strongly agents hold on to their initial view (see "Opinion dynamics" below)
+- `--opinion_noise` (daily personal opinion drift; default 0, i.e. none)
 - `--trust_gain` (default 0.02), `--trust_loss` (default 0.02), `--trust_reversion` (default 0.02): how trust responds to help and refusals and how fast it returns to baseline (see "Trust" below)
 - `--disaster_days` (days on which a disaster strikes, e.g. `--disaster_days 60 100`; default none), `--disaster_severity` (0.5), `--disaster_threshold` (0.5), `--disaster_mitigation` (0.75), `--disaster_trust_shift` (0.05) (see "Disasters" below)
 - `--seed` (random seed)
@@ -94,8 +96,8 @@ When one strikes (before the day's mutual aid):
 4. Working together raises everyone's out-group trust by `--disaster_trust_shift`; failing together lowers it by the same amount. Repeated failures therefore make the next response more likely to fail.
 
 The disaster days are marked with gray vertical lines in both plots.
-These defaults are not tuned: with today's opinion dynamics cooperation sits around 0.59, so with the default threshold the response works in every dial setting.
-The mechanism is meant to become informative once the dial produces real clusters again (issues #16 and #17); a policy for when disasters strike automatically is left for later.
+These defaults are not tuned: with today's opinion dynamics cooperation sits between 0.52 and 0.59 after 150 days, so with the default threshold the response still works in every dial setting, though with less margin than before.
+The mechanism is meant to become more informative once the dial produces real clusters (issue #17); a policy for when disasters strike automatically is left for later.
 
 ## How opinions feed back into the model
 Opinions live in [-1, 1]; the distance between two agents' opinions is `d = |o_i - o_j|` (0..2).
@@ -111,29 +113,51 @@ Each day the normalization dial (`--lambda_`, `--engagement`) reshapes opinions,
 
 The intended causal chain: normalization → small opinion distances → more giving and fewer refusals → more trust and aid → lower starvation and higher stability.
 Engagement mode pushes agents apart → help across the divide stops, out-group trust falls, recruitment into outlier groups speeds up → higher starvation, lower stability.
-Neighbor averaging also uses trust (each day an agent moves `(trust_ij + trust_ji)/4` of the way to a random neighbor's opinion), so trust feeds back into opinions.
 Setting `homophily`, `opinion_altruism`, `opinion_trust` and `extremity_susceptibility` to 0 decouples opinions from everything else.
 
-Each agent's opinion also drifts a little every day (`--opinion_noise`, default 0.03), standing in for personal experience.
-Without it, neighbor averaging alone collapses opinions to consensus at any lambda, so the dial would have nothing to act on.
-With it, opinion spread settles where the drift balances the pull toward consensus, so each lambda gives its own level of spread.
+## Opinion dynamics
+Core attitudes are sticky, persuasion effects are small, and people give little weight to views far from their own.
+Opinions therefore follow a Friedkin–Johnsen model with bounded confidence. Every day, each agent:
 
-Typical results (150 days, mean of the last 50 days over seeds 3, 7, 11, 23, 42, 99):
+1. **Meets one partner**, chosen the same way as the aid partner (homophily and the archetypes' `cross_pref`).
+2. **Bounded confidence**: if the partner's opinion is within `--epsilon` (0.5) of its own, it moves `influence · (trust_ij + trust_ji)/2` of the way toward it: about 3% a day at typical trust, with `--influence 0.05`. A partner further away has no effect; there is no repulsion (evidence for a backfire effect is weak).
+3. The archetypes' `polarization` and the normalization dial (`--lambda_`, `--engagement`) then push opinions toward or away from the population mean, as before.
+4. **Anchoring**: each agent keeps its initial opinion as an anchor and a personal stubbornness `s_i`, drawn from N(`--stubbornness`, `--stubbornness`/2) clipped to [0, 1]. The new opinion is `s_i · anchor + (1 - s_i) · (result of steps 2–3)`.
+5. Optional personal drift `--opinion_noise` (default 0) is added, and opinions are clipped to [-1, 1].
 
-| run | opinion_std | stability | avg_trust | avg_trust_in | avg_trust_out | minority_starvation_rate | overall_starvation_rate |
-|---|---|---|---|---|---|---|---|
-| `--lambda_ 0` | 0.053 | 0.538 | 0.611 | 0.662 | 0.560 | 0.523 | 0.157 |
-| `--lambda_ 0.05` | 0.048 | 0.540 | 0.614 | 0.663 | 0.565 | 0.507 | 0.152 |
-| `--lambda_ 0.15` | 0.042 | 0.536 | 0.612 | 0.658 | 0.566 | 0.536 | 0.161 |
-| `--lambda_ 0.5` | 0.033 | 0.538 | 0.623 | 0.667 | 0.580 | 0.519 | 0.156 |
-| `--lambda_ 0.15 --engagement 1` | 0.185 | 0.536 | 0.606 | 0.653 | 0.560 | 0.540 | 0.162 |
+Because of the anchors, opinions no longer collapse to consensus and need no noise to stay apart: the settled spread comes from how spread out the anchors are, and agents keep their own views (the correlation between an agent's final opinion and its anchor averages 0.79–0.98, depending on the dial).
+With the dial off and no outlier groups, peer influence and anchoring alone take about six weeks (39–47 days) to settle, at a spread of about 0.20 (from 0.25 at the start).
+Raising `--epsilon` or lowering `--stubbornness` narrows the spread, the reverse widens it (6 seeds, last 50 days):
 
-Trust settles within the run (the last 50 days differ from the 50 before by less than 0.01), no agent's trust falls below 0.05, and the six seeds agree to within ±0.02.
-**The dial now has only a small effect.** Before trust was fixed, trust eroded on every meeting and fell to 0.06–0.21; low trust weakened neighbor averaging, which let the dial spread opinions out (std 0.48 at `lambda_ 0`, 0.98 in engagement mode), and weak trust then cut aid through `trust_half`.
-With trust held near its baseline, neighbor averaging (about 30% of the way to a neighbor each day) dominates the opinion dynamics, so even `lambda_ 0` stays near consensus, and engagement mode reaches only 0.19 (0.10–0.31 between seeds).
-Opinion distance therefore rarely causes refusals: with `homophily 2` polarized agents mostly meet like-minded neighbors anyway.
-Stronger normalization still gives slightly more trust, and engagement slightly less, but the starvation differences between settings are within seed noise.
-Weaker influence (issue #16) and a feed that acts on exposure and out-group trust (issue #17) are the planned ways to restore a visible effect.
+| change from the defaults | opinion_std at `--lambda_ 0.05` | opinion_std at `--lambda_ 0.15` |
+|---|---|---|
+| `--epsilon 0.25` | 0.248 | 0.123 |
+| (defaults) | 0.219 | 0.117 |
+| `--epsilon 1.0` | 0.203 | 0.117 |
+| `--stubbornness 0.2` | 0.235 | 0.163 |
+| `--stubbornness 0.05` | 0.191 | 0.076 |
+
+`epsilon` matters little at `--lambda_ 0.15` because the dial keeps almost every partner within 0.5.
+
+Typical results (150 days, mean of the last 50 days over seeds 3, 7, 11, 23, 42, 99; "settles by" is the first day after which `opinion_std` stays closer to its final level than 10% of its total change; mean and range over the seeds):
+
+| run | opinion_std | settles by (day) | anchor corr. | stability | avg_trust | avg_trust_in | avg_trust_out | minority_starvation_rate | overall_starvation_rate |
+|---|---|---|---|---|---|---|---|---|---|
+| `--lambda_ 0` | 0.570 | still rising | 0.87 | 0.535 | 0.595 | 0.639 | 0.550 | 0.544 | 0.163 |
+| `--lambda_ 0.05` | 0.219 | 132 (87–150) | 0.98 | 0.535 | 0.599 | 0.648 | 0.549 | 0.540 | 0.162 |
+| `--lambda_ 0.15` | 0.117 | 19 (6–25) | 0.95 | 0.536 | 0.599 | 0.646 | 0.552 | 0.536 | 0.161 |
+| `--lambda_ 0.5` | 0.050 | 3 | 0.92 | 0.536 | 0.611 | 0.654 | 0.568 | 0.536 | 0.161 |
+| `--lambda_ 0.15 --engagement 1` | 0.991 | 29 (26–31) | 0.79 | 0.533 | 0.622 | 0.662 | 0.581 | 0.565 | 0.169 |
+
+**The dial and the archetypes now drive opinion spread, not peer influence.** Peer influence used to move an agent about 30% of the way to a random neighbor each day, which kept every setting near consensus (std 0.03–0.05 with noise, 0.19 in engagement mode). At about 3% a day it is weaker than the society-wide pushes, so:
+
+- **Normalization narrows the spread to a level that depends on lambda** (0.22 at 0.05, 0.12 at 0.15, 0.05 at 0.5) instead of a near-identical consensus. Because the dial pulls directly (15% of the way to the mean each day at 0.15), these settings still settle fast: 6–25 days at 0.15, 3 days at 0.5. Making the dial act through what people see is issue #17.
+- **Without normalization the outlier groups polarize society.** The archetypes' `polarization` grows with their membership, and once nearly everyone has joined a group (issue #18) it pushes harder than the anchors pull back: at `--lambda_ 0` the spread is still rising at day 150 (0.57, up 0.07 on the 50 days before), and at 0.05 it creeps up until late in the run.
+- **Engagement mode still pins nearly everyone at ±1**, because it is a direct 15%-a-day push away from the mean; issue #17 replaces it with a feed that goes through bounded confidence.
+
+Trust settles within the run (the last 50 days differ from the 50 before by at most 0.015) and the six seeds agree to within ±0.03.
+Because the anchors keep the two opinion camps apart, help across the divide is refused more often than before: 22–32 of the 240 agents (depending on the seed) end with out-group trust below 0.2, a few near 0. All of them are minority agents, nearly all in the archetypes with a negative `trust_delta` (political extremists, anti-vaxx, religious cult). No agent's in-group trust falls below 0.2.
+The starvation differences between dial settings are still within seed noise; engagement mode is slightly worse.
 Stability and inequality (about 0.31) are dominated by the gap between majority savings and the minority's hand-to-mouth income in every setting.
 
 ## Outputs
