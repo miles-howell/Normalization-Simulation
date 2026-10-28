@@ -120,6 +120,7 @@ class RunResult:
     metrics: pd.DataFrame
     opinions: np.ndarray      # (days, N) after each day
     resources: np.ndarray     # (days, N) savings carried over after each day
+    on_hand: np.ndarray       # (days, N) on hand after aid each day; below survival_floor = starving
     affil: np.ndarray         # (days, N) affiliation labels after each day
     is_minority: np.ndarray   # (N,)
     adj: np.ndarray           # (N, N) network
@@ -142,7 +143,7 @@ def run_recorded(p: Params, on_day: Optional[Callable[[int], None]] = None) -> R
     stack = lambda key: np.array([s[key] for s in snaps])
     return RunResult(
         params=p, metrics=pd.DataFrame(sim.history), opinions=stack("opinions"), resources=stack("resources"),
-        affil=stack("affil"), is_minority=sim.is_minority.copy(), adj=sim.adj.copy(),
+        on_hand=stack("on_hand"), affil=stack("affil"), is_minority=sim.is_minority.copy(), adj=sim.adj.copy(),
     )
 
 
@@ -157,6 +158,39 @@ def affiliation_shares(affil: np.ndarray) -> pd.DataFrame:
     """Share of agents in each outlier group per day (columns in OUTLIERS order, then 'none')."""
     names = list(OUTLIERS) + ["none"]
     return pd.DataFrame({k: (affil == k).mean(axis=1) for k in names})
+
+
+def spring_layout(adj: np.ndarray, seed: int = 0, iterations: int = 150) -> np.ndarray:
+    """Fruchterman-Reingold positions for the network, scaled to [-1, 1]; returns (N, 2).
+
+    Uses its own RNG, so it never disturbs the simulation's global one. A weak pull to the center keeps
+    isolated agents and small components on screen.
+    """
+    n = len(adj)
+    rng = np.random.default_rng(seed)
+    pos = rng.uniform(-1, 1, (n, 2))
+    if n < 2:
+        return np.zeros((n, 2))
+    k = np.sqrt(4.0 / n)  # ideal edge length for a 2 x 2 area
+    temp = 0.2
+    for _ in range(iterations):
+        delta = pos[:, None, :] - pos[None, :, :]
+        dist = np.maximum(np.linalg.norm(delta, axis=2), 1e-3)
+        # Every pair repels, linked pairs attract
+        strength = k * k / dist - adj * dist * dist / k
+        force = (delta / dist[:, :, None] * strength[:, :, None]).sum(axis=1) - 0.1 * pos
+        length = np.maximum(np.linalg.norm(force, axis=1), 1e-9)
+        pos += force / length[:, None] * np.minimum(length, temp)[:, None]
+        temp *= 0.97
+    pos -= pos.mean(axis=0)
+    return pos / np.abs(pos).max()
+
+
+def frame_days(days: int, max_frames: int) -> List[int]:
+    """Evenly spaced days to animate, always including the first and last day."""
+    if days <= max_frames:
+        return list(range(days))
+    return sorted(set(np.linspace(0, days - 1, max_frames).round().astype(int).tolist()))
 
 
 def summarize(metrics: pd.DataFrame, last: int = 30) -> pd.Series:

@@ -182,6 +182,8 @@ class Simulation:
         self.public_good_stock = 0.0
         # Savings carried over from previous days (after consumption and decay)
         self.resources = np.zeros(N)
+        # What each agent had on hand after aid on the last day stepped (starving if below survival_floor)
+        self.on_hand = np.zeros(N)
 
         self.history: Dict[str, list] = {k: [] for k in [
             "day","stability","inequality","diversity","avg_trust","avg_trust_in","avg_trust_out",
@@ -413,6 +415,7 @@ class Simulation:
         self.history["disaster_loss"].append(disaster_loss)
         self.history["disaster_cooperation"].append(disaster_cooperation)
 
+        self.on_hand = resources.copy()
         # Eat, then carry what is left over to tomorrow
         self.resources = np.maximum(resources - self.p.survival_floor, 0.0) * (1.0 - self.p.resource_decay)
 
@@ -460,6 +463,7 @@ class Simulation:
         return {
             "opinions": self.opinions.copy(),
             "resources": self.resources.copy(),
+            "on_hand": self.on_hand.copy(),
             "affil": self.affil.copy(),
             "trust_in": self.trust_in.copy(),
             "trust_out": self.trust_out.copy(),

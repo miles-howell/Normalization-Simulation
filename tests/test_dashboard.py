@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 
 from normalization_sim.dashboard import (
-    CONTROLS, PRESETS, Params, affiliation_shares, opinion_density, params_key, parse_days, preset_params,
-    run_recorded, summarize,
+    CONTROLS, PRESETS, Params, affiliation_shares, frame_days, opinion_density, params_key,
+    parse_days, preset_params, run_recorded, spring_layout, summarize,
 )
 
 
@@ -56,3 +56,29 @@ def test_affiliation_shares_sum_to_one():
 def test_summarize_uses_last_days():
     r = run_recorded(Params(N=20, days=8, seed=1))
     assert summarize(r.metrics, last=3)["stability"] == pytest.approx(r.metrics["stability"].tail(3).mean())
+
+
+def test_spring_layout_is_deterministic_bounded_and_pulls_links_together():
+    sim_adj = run_recorded(Params(N=60, days=1, seed=3)).adj
+    pos = spring_layout(sim_adj, seed=1)
+    assert pos.shape == (60, 2)
+    assert np.abs(pos).max() == pytest.approx(1.0)
+    np.testing.assert_array_equal(pos, spring_layout(sim_adj, seed=1))
+    d = np.linalg.norm(pos[:, None] - pos[None], axis=2)
+    linked = sim_adj.astype(bool)
+    unlinked = ~linked & ~np.eye(60, dtype=bool)
+    assert d[linked].mean() < d[unlinked].mean()
+
+
+def test_spring_layout_leaves_global_rng_alone():
+    np.random.seed(0)
+    expected = np.random.rand()
+    np.random.seed(0)
+    spring_layout(np.ones((5, 5)) - np.eye(5))
+    assert np.random.rand() == expected
+
+
+def test_frame_days():
+    assert frame_days(5, 10) == [0, 1, 2, 3, 4]
+    days = frame_days(150, 40)
+    assert days[0] == 0 and days[-1] == 149 and len(days) <= 40 and days == sorted(set(days))

@@ -41,6 +41,7 @@ streamlit run app.py
 
 - **Dashboard**: headline tiles (mean over the last 30 days) and the metrics over time, with disaster days marked.
 - **Opinions**: the opinion distribution as a heatmap over time, the opinions of majority and minority on any day, and outlier group membership.
+- **Network**: every agent as a dot, sized by what it has on hand, with a dark ring when it is starving, and colored by opinion, outlier group or majority/minority. Press Play to animate the days. Arrange by *Network* to see the social graph, or by *Opinion* to put each agent at its opinion on the x-axis, so you can watch the population converge or split.
 - **Compare A/B**: runs a second scenario that changes a few dials (by default it switches the feed to engagement mode) with the same seed, and puts the two side by side.
 - **Data**: the metrics table, a CSV download and the parameters used.
 
