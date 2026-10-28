@@ -455,7 +455,24 @@ class Simulation:
         new_aff[leaves] = "none"
         self.affil = new_aff
 
-    def run(self) -> pd.DataFrame:
+    def snapshot(self) -> Dict[str, np.ndarray]:
+        """Copies of the per-agent state, for views that need more than the daily aggregates."""
+        return {
+            "opinions": self.opinions.copy(),
+            "resources": self.resources.copy(),
+            "affil": self.affil.copy(),
+            "trust_in": self.trust_in.copy(),
+            "trust_out": self.trust_out.copy(),
+            "is_minority": self.is_minority.copy(),
+        }
+
+    def iter_days(self):
+        """Run the simulation one day at a time, yielding each day after it has been stepped."""
         for day in range(self.p.days):
             self.step(day)
+            yield day
+
+    def run(self) -> pd.DataFrame:
+        for _ in self.iter_days():
+            pass
         return pd.DataFrame(self.history)
