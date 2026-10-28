@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" role="img" aria-labelledby="t d">
+  <title id="t">How the feed dial reaches hardship</title>
+  <desc id="d">Normalizing versus engagement feed at lambda 0.5: opinion spread, out-group trust, minority starvation and stability, averaged over the last 50 days of a seed-7 run.</desc>
+  <rect width="1200" height="430" rx="26" fill="#12151A"/>
+  <text x="64" y="76" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" letter-spacing="2" fill="#9AA3AE">FEED  →  OPINIONS  →  TRUST  →  HARDSHIP</text>
+  <rect x="270" y="104" width="200" height="64" rx="12" fill="#1A1F27" stroke="#2C333D" stroke-width="2"/>
+  <text x="370.0" y="144" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif" font-size="20" font-weight="700" fill="#F2EEE6">Opinion spread</text>
+  <rect x="494" y="104" width="200" height="64" rx="12" fill="#1A1F27" stroke="#2C333D" stroke-width="2"/>
+  <text x="594.0" y="144" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif" font-size="20" font-weight="700" fill="#F2EEE6">Out-group trust</text>
+  <path d="M476 136 h12 m-5 -6 l6 6 l-6 6" fill="none" stroke="#9AA3AE" stroke-width="2"/>
+  <rect x="718" y="104" width="200" height="64" rx="12" fill="#1A1F27" stroke="#2C333D" stroke-width="2"/>
+  <text x="818.0" y="144" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif" font-size="20" font-weight="700" fill="#F2EEE6">Minority starvation</text>
+  <path d="M700 136 h12 m-5 -6 l6 6 l-6 6" fill="none" stroke="#9AA3AE" stroke-width="2"/>
+  <rect x="942" y="104" width="200" height="64" rx="12" fill="#1A1F27" stroke="#2C333D" stroke-width="2"/>
+  <text x="1042.0" y="144" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif" font-size="20" font-weight="700" fill="#F2EEE6">Stability</text>
+  <path d="M924 136 h12 m-5 -6 l6 6 l-6 6" fill="none" stroke="#9AA3AE" stroke-width="2"/>
+  <rect x="48" y="196" width="1104" height="82" rx="14" fill="#1A1F27"/>
+  <rect x="48" y="196" width="8" height="82" rx="4" fill="#5DA9E9"/>
+  <text x="76" y="232" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif" font-size="22" font-weight="700" fill="#F2EEE6">Normalizing feed</text>
+  <text x="76" y="260" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif" font-size="18" fill="#9AA3AE">mainstream content</text>
+  <text x="370.0" y="252" text-anchor="middle" font-family="Georgia, 'Songti SC', serif" font-size="42" font-weight="700" fill="#5DA9E9">0.16</text>
+  <text x="594.0" y="252" text-anchor="middle" font-family="Georgia, 'Songti SC', serif" font-size="42" font-weight="700" fill="#5DA9E9">0.64</text>
+  <text x="818.0" y="252" text-anchor="middle" font-family="Georgia, 'Songti SC', serif" font-size="42" font-weight="700" fill="#5DA9E9">0.43</text>
+  <text x="1042.0" y="252" text-anchor="middle" font-family="Georgia, 'Songti SC', serif" font-size="42" font-weight="700" fill="#5DA9E9">0.55</text>
+  <rect x="48" y="294" width="1104" height="82" rx="14" fill="#1A1F27"/>
+  <rect x="48" y="294" width="8" height="82" rx="4" fill="#F08A4B"/>
+  <text x="76" y="330" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif" font-size="22" font-weight="700" fill="#F2EEE6">Engagement feed</text>
+  <text x="76" y="358" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif" font-size="18" fill="#9AA3AE">own side + outrage</text>
+  <text x="370.0" y="350" text-anchor="middle" font-family="Georgia, 'Songti SC', serif" font-size="42" font-weight="700" fill="#F08A4B">0.75</text>
+  <text x="594.0" y="350" text-anchor="middle" font-family="Georgia, 'Songti SC', serif" font-size="42" font-weight="700" fill="#F08A4B">0.33</text>
+  <text x="818.0" y="350" text-anchor="middle" font-family="Georgia, 'Songti SC', serif" font-size="42" font-weight="700" fill="#F08A4B">0.54</text>
+  <text x="1042.0" y="350" text-anchor="middle" font-family="Georgia, 'Songti SC', serif" font-size="42" font-weight="700" fill="#F08A4B">0.54</text>
+  <text x="64" y="414" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" fill="#9AA3AE">mean of days 100–150, one seed; seed ranges are in docs/model.md</text>
+</svg>
