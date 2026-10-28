@@ -31,6 +31,22 @@ It’s designed to be **simple, hackable, and visual**—ideal for iterative exp
     python -m normalization_sim.run_cli --days 150 --lambda_ 0.15 --engagement 1 --outdir outputs/engage_demo
     ```
 
+## Interactive dashboard
+A Streamlit app puts every dial below in a sidebar and draws the results as interactive charts:
+
+```bash
+pip install -r requirements-app.txt
+streamlit run app.py
+```
+
+- **Dashboard**: headline tiles (mean over the last 30 days) and the metrics over time, with disaster days marked.
+- **Opinions**: the opinion distribution as a heatmap over time, the opinions of majority and minority on any day, and outlier group membership.
+- **Network**: every agent as a dot, sized by what it has on hand, with a dark ring when it is starving, and colored by opinion, outlier group or majority/minority. Press Play to animate the days. Arrange by *Network* to see the social graph, or by *Opinion* to put each agent at its opinion on the x-axis, so you can watch the population converge or split.
+- **Compare A/B**: runs a second scenario that changes a few dials (by default it switches the feed to engagement mode) with the same seed, and puts the two side by side.
+- **Data**: the metrics table, a CSV download and the parameters used.
+
+Presets in the sidebar load common starting points. Runs take a few seconds (longer for many agents or days) and are cached, so switching views or going back to earlier settings is instant.
+
 ## Dials (CLI flags)
 - `--N` (agents, default 240)
 - `--days` (time steps)
